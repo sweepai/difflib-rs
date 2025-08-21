@@ -134,6 +134,15 @@ impl SequenceMatcher {
     }
 
     fn get_matching_blocks(&self) -> Vec<(usize, usize, usize)> {
+        // If sequences are identical, return one big match
+        if self.a == self.b {
+            if self.a.is_empty() {
+                return vec![(0, 0, 0)];
+            } else {
+                return vec![(0, 0, self.a.len()), (self.a.len(), self.b.len(), 0)];
+            }
+        }
+        
         let mut matches = Vec::new();
         let mut queue = vec![(0, self.a.len(), 0, self.b.len())];
         
