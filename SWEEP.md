@@ -7,41 +7,50 @@ This is a Rust implementation of Python's `difflib.unified_diff` function with P
 
 ### Building the Package
 ```bash
+# Activate virtual environment (required)
+source venv/bin/activate
+
 # Clear build cache (important when changes aren't taking effect!)
 cargo clean
 
 # Development build (for testing)
-uv run maturin develop
+maturin develop
 
 # Production build with release optimizations (recommended for benchmarking)
-uv run maturin develop --release
+maturin develop --release
 
 # Build wheel for distribution
-uv run maturin build --release
+maturin build --release
 ```
 
 ### Testing Commands
 ```bash
+# Activate virtual environment first
+source venv/bin/activate
+
 # Run all tests
-uv run pytest tests/ -v
+python -m pytest tests/ -v
 
 # Run specific test
-uv run pytest tests/test_unified_diff.py::test_identical_sequences -v
+python -m pytest tests/test_unified_diff.py::test_identical_sequences -v
 
 # Run tests with more verbose output
-uv run pytest tests/ -vv
+python -m pytest tests/ -vv
 
 # Run only basic sanity tests
-uv run pytest tests/test_unified_diff.py -k "sanity or basic" -v
+python -m pytest tests/test_unified_diff.py -k "sanity or basic" -v
+
+# Run benchmark tests
+python -m pytest tests/test_benchmark.py -s
 ```
 
 ### Package Management
 ```bash
-# Add development dependencies
-uv add --dev pytest
+# Activate virtual environment
+source venv/bin/activate
 
 # Install the package in development mode
-uv run maturin develop
+maturin develop
 
 # Check for Rust compilation errors
 cargo check

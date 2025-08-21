@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone)]
 struct OpCode {
@@ -177,7 +177,7 @@ impl<'a> SequenceMatcher<'a> {
     }
 
     fn get_matching_blocks(&self) -> Vec<(usize, usize, usize)> {
-        // Optimized implementation with early termination for common cases
+        // Use queue-based approach like Python for better performance
         
         // Fast path for identical sequences
         if self.a.len() == self.b.len() {
@@ -194,22 +194,21 @@ impl<'a> SequenceMatcher<'a> {
         }
         
         let mut matches: Vec<(usize, usize, usize)> = Vec::new();
-        let mut stack: Vec<(usize, usize, usize, usize)> = vec![(0, self.a.len(), 0, self.b.len())];
+        // Use queue instead of stack like Python's implementation
+        let mut queue: VecDeque<(usize, usize, usize, usize)> = VecDeque::new();
+        queue.push_back((0, self.a.len(), 0, self.b.len()));
 
-        while let Some((alo, ahi, blo, bhi)) = stack.pop() {
-            // Skip tiny regions - not worth recursing
-            if ahi - alo < 2 || bhi - blo < 2 {
-                continue;
-            }
-            
+        while let Some((alo, ahi, blo, bhi)) = queue.pop_front() {
             let (i, j, k) = self.find_longest_match(alo, ahi, blo, bhi);
+            
+            // If we found a match, add it and queue the surrounding regions
             if k > 0 {
                 matches.push((i, j, k));
                 if alo < i && blo < j {
-                    stack.push((alo, i, blo, j));
+                    queue.push_back((alo, i, blo, j));
                 }
                 if i + k < ahi && j + k < bhi {
-                    stack.push((i + k, ahi, j + k, bhi));
+                    queue.push_back((i + k, ahi, j + k, bhi));
                 }
             }
         }
@@ -235,19 +234,17 @@ impl<'a> SequenceMatcher<'a> {
     }
 
     fn find_longest_match(&self, alo: usize, ahi: usize, blo: usize, bhi: usize) -> (usize, usize, usize) {
-        // Optimized port - reuse allocations (critical for large files)
+        // Use HashMap for sparse representation like Python - CRITICAL for performance with small changes
         
         let mut besti = alo;
         let mut bestj = blo;
         let mut bestsize = 0;
         
-        // Pre-allocate both vectors once - MAJOR performance optimization
-        let mut j2len = vec![0usize; self.b.len()];
-        let mut newj2len = vec![0usize; self.b.len()];
+        // Use HashMap like Python for sparse representation - only stores non-zero values
+        let mut j2len: HashMap<usize, usize> = HashMap::new();
         
         for i in alo..ahi {
-            // Clear instead of reallocating - this is the key optimization
-            newj2len.fill(0);
+            let mut newj2len: HashMap<usize, usize> = HashMap::new();
             
             // Get all positions where a[i] appears in b (like Python's b2j.get())
             if let Some(indices) = self.b2j.get(self.a[i].as_str()) {
@@ -261,11 +258,16 @@ impl<'a> SequenceMatcher<'a> {
                     }
                     
                     // k = length of longest match ending at (i-1, j-1)
-                    let k = if j > 0 { j2len[j - 1] } else { 0 };
+                    // Use sparse lookup - only non-zero values are stored
+                    let k = if j > 0 { 
+                        j2len.get(&(j - 1)).copied().unwrap_or(0) 
+                    } else { 
+                        0 
+                    };
                     
                     // Extend match by 1
                     let newk = k + 1;
-                    newj2len[j] = newk;
+                    newj2len.insert(j, newk);
                     
                     // Track best match found so far
                     if newk > bestsize {
@@ -276,8 +278,8 @@ impl<'a> SequenceMatcher<'a> {
                 }
             }
             
-            // Swap instead of move - avoid any allocations
-            std::mem::swap(&mut j2len, &mut newj2len);
+            // Move instead of swap - more efficient for HashMap
+            j2len = newj2len;
         }
         
         // Extend the best match as far as possible in both directions
