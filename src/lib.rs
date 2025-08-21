@@ -235,53 +235,48 @@ impl<'a> SequenceMatcher<'a> {
     }
 
     fn find_longest_match(&self, alo: usize, ahi: usize, blo: usize, bhi: usize) -> (usize, usize, usize) {
-        // Python's difflib algorithm with sparse data structure optimization
+        // Optimized port - reuse allocations (critical for large files)
         
         let mut besti = alo;
         let mut bestj = blo;
         let mut bestsize = 0;
         
-        // Use HashMap for sparse representation - most entries are 0
-        // This is much more efficient when there are few matches
-        let mut j2len: HashMap<usize, usize> = HashMap::new();
-        let mut newj2len: HashMap<usize, usize> = HashMap::new();
+        // Pre-allocate both vectors once - MAJOR performance optimization
+        let mut j2len = vec![0usize; self.b.len()];
+        let mut newj2len = vec![0usize; self.b.len()];
         
         for i in alo..ahi {
-            // Clear for next iteration
-            newj2len.clear();
+            // Clear instead of reallocating - this is the key optimization
+            newj2len.fill(0);
             
-            // Get all positions where a[i] appears in b
+            // Get all positions where a[i] appears in b (like Python's b2j.get())
             if let Some(indices) = self.b2j.get(self.a[i].as_str()) {
                 for &j in indices {
-                    // Skip if j is outside our range
+                    // Bounds check - exactly like Python
                     if j < blo {
                         continue;
                     }
                     if j >= bhi {
-                        break;  // indices are sorted, so we can break early
+                        break;
                     }
                     
-                    // k = length of match ending just before this position
-                    let k = if j > 0 {
-                        j2len.get(&(j - 1)).copied().unwrap_or(0)
-                    } else {
-                        0
-                    };
+                    // k = length of longest match ending at (i-1, j-1)
+                    let k = if j > 0 { j2len[j - 1] } else { 0 };
                     
-                    // We're extending the match by 1
+                    // Extend match by 1
                     let newk = k + 1;
-                    newj2len.insert(j, newk);
+                    newj2len[j] = newk;
                     
-                    // Update best match if this is better
+                    // Track best match found so far
                     if newk > bestsize {
-                        besti = i + 1 - newk;  // start of match in a
-                        bestj = j + 1 - newk;  // start of match in b
+                        besti = i + 1 - newk;
+                        bestj = j + 1 - newk;
                         bestsize = newk;
                     }
                 }
             }
             
-            // Swap HashMaps
+            // Swap instead of move - avoid any allocations
             std::mem::swap(&mut j2len, &mut newj2len);
         }
         
