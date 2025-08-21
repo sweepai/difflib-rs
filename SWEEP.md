@@ -99,9 +99,25 @@ cargo check --manifest-path Cargo.toml
 ```
 
 ## Performance Notes
-- Rust implementation provides significant performance improvements over Python's built-in difflib
-- Uses efficient algorithms for sequence matching and diff generation
-- Memory-efficient handling of large text sequences
+
+### Benchmark Results Summary
+Based on comprehensive benchmarking (`tests/test_benchmark.py`):
+
+**Where Rust Excels:**
+- **Identical sequences**: 4.9x faster than Python
+- **Completely different files**: 2.6x faster than Python
+- **Small files with many changes**: Competitive performance
+
+**Where Python's difflib is Faster:**
+- **Small changes in large files**: Python is 20-78x faster (critical performance gap)
+- **Medium-sized files with small changes**: Python is 2-4x faster
+- **General use cases**: Python's implementation is highly optimized
+
+### Key Findings
+- The Rust implementation has O(n²) or worse scaling for small changes in large files
+- Python's difflib uses optimizations that the Rust version currently lacks
+- PyO3 overhead affects small datasets but is negligible for large ones
+- Both implementations produce nearly identical results (within 10 lines difference)
 
 ## Future Improvements
 - Fix identical sequence handling to return empty list
