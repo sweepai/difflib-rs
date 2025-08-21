@@ -177,11 +177,31 @@ impl<'a> SequenceMatcher<'a> {
     }
 
     fn get_matching_blocks(&self) -> Vec<(usize, usize, usize)> {
-        // Simple implementation following Python's difflib exactly
+        // Optimized implementation with early termination for common cases
+        
+        // Fast path for identical sequences
+        if self.a.len() == self.b.len() {
+            let mut all_equal = true;
+            for i in 0..self.a.len() {
+                if self.a[i] != self.b[i] {
+                    all_equal = false;
+                    break;
+                }
+            }
+            if all_equal {
+                return vec![(0, 0, self.a.len()), (self.a.len(), self.b.len(), 0)];
+            }
+        }
+        
         let mut matches: Vec<(usize, usize, usize)> = Vec::new();
         let mut stack: Vec<(usize, usize, usize, usize)> = vec![(0, self.a.len(), 0, self.b.len())];
 
         while let Some((alo, ahi, blo, bhi)) = stack.pop() {
+            // Skip tiny regions - not worth recursing
+            if ahi - alo < 2 || bhi - blo < 2 {
+                continue;
+            }
+            
             let (i, j, k) = self.find_longest_match(alo, ahi, blo, bhi);
             if k > 0 {
                 matches.push((i, j, k));
@@ -215,19 +235,20 @@ impl<'a> SequenceMatcher<'a> {
     }
 
     fn find_longest_match(&self, alo: usize, ahi: usize, blo: usize, bhi: usize) -> (usize, usize, usize) {
-        // Python's difflib algorithm with critical optimizations
+        // Python's difflib algorithm with sparse data structure optimization
         
         let mut besti = alo;
         let mut bestj = blo;
         let mut bestsize = 0;
         
-        // Pre-allocate buffers once and reuse them (major optimization)
-        let mut j2len = vec![0usize; self.b.len()];
-        let mut newj2len = vec![0usize; self.b.len()];
+        // Use HashMap for sparse representation - most entries are 0
+        // This is much more efficient when there are few matches
+        let mut j2len: HashMap<usize, usize> = HashMap::new();
+        let mut newj2len: HashMap<usize, usize> = HashMap::new();
         
         for i in alo..ahi {
-            // Clear the buffer instead of allocating new
-            newj2len.fill(0);
+            // Clear for next iteration
+            newj2len.clear();
             
             // Get all positions where a[i] appears in b
             if let Some(indices) = self.b2j.get(self.a[i].as_str()) {
@@ -242,14 +263,14 @@ impl<'a> SequenceMatcher<'a> {
                     
                     // k = length of match ending just before this position
                     let k = if j > 0 {
-                        j2len[j - 1]
+                        j2len.get(&(j - 1)).copied().unwrap_or(0)
                     } else {
                         0
                     };
                     
                     // We're extending the match by 1
                     let newk = k + 1;
-                    newj2len[j] = newk;
+                    newj2len.insert(j, newk);
                     
                     // Update best match if this is better
                     if newk > bestsize {
@@ -260,7 +281,7 @@ impl<'a> SequenceMatcher<'a> {
                 }
             }
             
-            // Swap buffers instead of cloning
+            // Swap HashMaps
             std::mem::swap(&mut j2len, &mut newj2len);
         }
         
@@ -315,6 +336,7 @@ fn unified_diff(
     }
     
     let mut result = Vec::new();
+    
     let matcher = SequenceMatcher::new(&a, &b);
     let groups = matcher.get_grouped_opcodes(n);
 

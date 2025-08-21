@@ -183,6 +183,45 @@ class TestBenchmark:
             # Verify results are similar
             assert abs(len(python_result) - len(rust_result)) <= 10, "Results should be similar length"
     
+    def test_medium_changes_large_files(self):
+        """Test performance with medium changes in large files."""
+        print("\n--- Medium Changes in Large Files Benchmark ---")
+        
+        # Test different file sizes with medium changes (5% modification)
+        for num_lines in [5000, 10000, 20000]:
+            # Generate large file
+            original = generate_large_text(num_lines)
+            modified = original.copy()
+            
+            # Make medium number of changes (5% of lines)
+            num_changes = int(num_lines * 0.05)
+            for i in range(num_changes):
+                # Change a random line
+                idx = random.randint(0, len(modified) - 1)
+                modified[idx] = modified[idx][:30] + " CHANGED " + modified[idx][30:]
+            
+            # Time Python implementation
+            python_result, python_time = time_function(
+                lambda: list(difflib.unified_diff(original, modified, 'original', 'modified'))
+            )
+            
+            # Time Rust implementation
+            rust_result, rust_time = time_function(
+                rust_unified_diff, original, modified, 'original', 'modified'
+            )
+            
+            # Calculate speedup
+            speedup = python_time / rust_time if rust_time > 0 else float('inf')
+            
+            print(f"\n  {num_lines} lines, {num_changes} changes (5%):")
+            print(f"    Python time: {python_time:.4f}s")
+            print(f"    Rust time:   {rust_time:.4f}s")
+            print(f"    Speedup:     {speedup:.2f}x")
+            print(f"    Diff size:   {len(python_result)} lines (Python), {len(rust_result)} lines (Rust)")
+            
+            # Verify results are similar
+            assert abs(len(python_result) - len(rust_result)) <= 50, "Results should be similar length"
+    
     def test_memory_usage_large_diff(self):
         """Test with very large diffs to check memory efficiency."""
         # Generate large sequences

@@ -7,13 +7,16 @@ This is a Rust implementation of Python's `difflib.unified_diff` function with P
 
 ### Building the Package
 ```bash
+# Clear build cache (important when changes aren't taking effect!)
+cargo clean
+
 # Development build (for testing)
 uv run maturin develop
 
-# Production build
-uv run maturin build
+# Production build with release optimizations (recommended for benchmarking)
+uv run maturin develop --release
 
-# Build with release optimizations
+# Build wheel for distribution
 uv run maturin build --release
 ```
 
