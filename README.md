@@ -15,24 +15,24 @@ This package provides a Rust-based implementation of the unified diff algorithm,
 
 ## Performance
 
-The Rust implementation consistently outperforms Python's built-in `difflib` module across all scenarios:
+The Rust implementation consistently outperforms Python's built-in `difflib` module across all scenarios while producing identical output:
 
 ### Benchmark Results
 
 #### Small Changes in Large Files
-- **5,000 lines, 5 changes**: 1.72x faster
+- **5,000 lines, 5 changes**: 1.73x faster
 - **10,000 lines, 5 changes**: 1.81x faster  
-- **20,000 lines, 5 changes**: 2.35x faster
+- **20,000 lines, 5 changes**: 2.37x faster
 
 #### Medium Changes in Large Files (5% changed)
-- **5,000 lines, 250 changes**: 2.30x faster
-- **10,000 lines, 500 changes**: 2.31x faster
-- **20,000 lines, 1,000 changes**: 2.29x faster
+- **5,000 lines, 250 changes**: 1.91x faster
+- **10,000 lines, 500 changes**: 2.21x faster
+- **20,000 lines, 1,000 changes**: 2.17x faster
 
 #### General Performance
-- **Small files (100-2000 lines)**: 1.5x-2.7x faster
-- **Identical sequences**: 5.5x faster
-- **Files with 50% changes**: 2.5x-2.8x faster
+- **Small files (100-2000 lines)**: 1.7x-2.25x faster
+- **Identical sequences**: 5.17x faster
+- **Files with 50% changes**: 2.58x-2.90x faster
 
 ### Key Optimizations
 

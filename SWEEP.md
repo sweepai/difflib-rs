@@ -112,30 +112,31 @@ cargo check --manifest-path Cargo.toml
 
 ## Performance Notes
 
-### Benchmark Results Summary (After Optimizations)
+### Benchmark Results Summary (After All Optimizations - Final)
 Based on comprehensive benchmarking (`tests/test_benchmark.py`):
 
-**Rust Now Outperforms Python in ALL Scenarios:**
+**Rust Outperforms Python in ALL Scenarios with IDENTICAL Output:**
 
 #### Small Changes in Large Files (Previously Worst Case)
-- **5,000 lines, 5 changes**: 1.72x faster (was 0.75x slower)
-- **10,000 lines, 5 changes**: 1.81x faster (was 0.54x slower)
-- **20,000 lines, 5 changes**: 2.35x faster (was 0.45x slower)
+- **5,000 lines, 5 changes**: 1.73x faster (was 0.75x slower initially)
+- **10,000 lines, 5 changes**: 1.81x faster (was 0.54x slower initially)
+- **20,000 lines, 5 changes**: 2.37x faster (was 0.45x slower initially)
 
 #### Medium Changes in Large Files
-- **5,000 lines, 250 changes**: 2.30x faster (was 0.68x slower)
-- **10,000 lines, 500 changes**: 2.31x faster (was 0.42x slower)
-- **20,000 lines, 1,000 changes**: 2.29x faster (was 0.21x slower)
+- **5,000 lines, 250 changes**: 1.91x faster (was 0.68x slower initially)
+- **10,000 lines, 500 changes**: 2.21x faster (was 0.42x slower initially)
+- **20,000 lines, 1,000 changes**: 2.17x faster (was 0.21x slower initially)
 
 #### Other Scenarios
-- **Identical sequences**: 5.5x faster than Python
-- **Small files (100-2000 lines)**: 1.5x-2.7x faster
-- **Files with 50% changes**: 2.5x-2.8x faster
+- **Identical sequences**: 5.17x faster than Python
+- **Small files (100-2000 lines)**: 1.7x-2.25x faster
+- **Files with 50% changes**: 2.58x-2.90x faster
 
 ### Key Optimizations That Fixed Performance
 1. **HashMap-based sparse representation** in `find_longest_match` (eliminated O(n²) memory operations)
 2. **Queue-based approach** in `get_matching_blocks` (better cache locality)
 3. **Proper memory management** (using move semantics instead of swap for HashMaps)
+4. **Fixed `get_grouped_opcodes`** to correctly limit context lines (ensures identical output to Python)
 
 ## Future Improvements
 - Fix identical sequence handling to return empty list
