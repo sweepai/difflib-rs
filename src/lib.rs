@@ -177,21 +177,55 @@ impl SequenceMatcher {
     }
 
     fn get_matching_blocks(&self) -> Vec<(usize, usize, usize)> {
-        // Iterative implementation following Python's difflib algorithm
+        // Optimized implementation with early prefix/suffix matching
         let mut matches: Vec<(usize, usize, usize)> = Vec::new();
-        let mut stack: Vec<(usize, usize, usize, usize)> = vec![(0, self.a.len(), 0, self.b.len())];
+        
+        // First, find common prefix
+        let mut prefix_len = 0;
+        while prefix_len < self.a.len() && prefix_len < self.b.len() && self.a[prefix_len] == self.b[prefix_len] {
+            prefix_len += 1;
+        }
+        
+        // Find common suffix (excluding the prefix we already found)
+        let mut suffix_len = 0;
+        let a_remaining = self.a.len() - prefix_len;
+        let b_remaining = self.b.len() - prefix_len;
+        while suffix_len < a_remaining && suffix_len < b_remaining 
+              && self.a[self.a.len() - 1 - suffix_len] == self.b[self.b.len() - 1 - suffix_len] {
+            suffix_len += 1;
+        }
+        
+        // Add prefix match if it exists
+        if prefix_len > 0 {
+            matches.push((0, 0, prefix_len));
+        }
+        
+        // If there's a middle section, process it recursively
+        let a_start = prefix_len;
+        let a_end = self.a.len() - suffix_len;
+        let b_start = prefix_len;
+        let b_end = self.b.len() - suffix_len;
+        
+        if a_start < a_end || b_start < b_end {
+            let mut stack: Vec<(usize, usize, usize, usize)> = vec![(a_start, a_end, b_start, b_end)];
 
-        while let Some((alo, ahi, blo, bhi)) = stack.pop() {
-            let (i, j, k) = self.find_longest_match(alo, ahi, blo, bhi);
-            if k > 0 {
-                matches.push((i, j, k));
-                if alo < i && blo < j {
-                    stack.push((alo, i, blo, j));
-                }
-                if i + k < ahi && j + k < bhi {
-                    stack.push((i + k, ahi, j + k, bhi));
+            while let Some((alo, ahi, blo, bhi)) = stack.pop() {
+                let (i, j, k) = self.find_longest_match(alo, ahi, blo, bhi);
+                if k > 0 {
+                    matches.push((i, j, k));
+                    if alo < i && blo < j {
+                        stack.push((alo, i, blo, j));
+                    }
+                    if i + k < ahi && j + k < bhi {
+                        stack.push((i + k, ahi, j + k, bhi));
+                    }
                 }
             }
+        }
+        
+        // Add suffix match if it exists
+        if suffix_len > 0 {
+            matches.push((self.a.len() - suffix_len, self.b.len() - suffix_len, suffix_len));
         }
 
         // Sort by positions (i, j)
@@ -215,196 +249,73 @@ impl SequenceMatcher {
     }
 
     fn find_longest_match(&self, alo: usize, ahi: usize, blo: usize, bhi: usize) -> (usize, usize, usize) {
-        let mut best_i = alo;
-        let mut best_j = blo;
-        let mut best_size = 0;
-
-        // Use the precomputed index for faster lookups
-        let mut j2len: HashMap<usize, usize> = HashMap::new();
-
+        // Python's difflib algorithm with critical optimizations
+        
+        let mut besti = alo;
+        let mut bestj = blo;
+        let mut bestsize = 0;
+        
+        // Use Vec instead of HashMap for better performance
+        // j2len[j] = length of longest match ending with a[i-1] and b[j]
+        let mut j2len = vec![0usize; self.b.len()];
+        
         for i in alo..ahi {
-            let mut newj2len: HashMap<usize, usize> = HashMap::new();
-
-            // Only check positions where this line actually appears in b
-            if let Some(positions) = self.b2j.get(&self.a[i]) {
-                for &j in positions {
-                    if j < blo || j >= bhi {
+            // For the current line a[i], we'll build a new j2len
+            let mut newj2len = vec![0usize; self.b.len()];
+            
+            // Get all positions where a[i] appears in b
+            if let Some(indices) = self.b2j.get(&self.a[i]) {
+                for &j in indices {
+                    // Skip if j is outside our range
+                    if j < blo {
                         continue;
                     }
-
-                    let k = if j == 0 { 0 } else { *j2len.get(&(j - 1)).unwrap_or(&0) };
-                    newj2len.insert(j, k + 1);
-                    if k + 1 > best_size {
-                        best_i = i - k;
-                        best_j = j - k;
-                        best_size = k + 1;
+                    if j >= bhi {
+                        break;  // indices are sorted, so we can break early
+                    }
+                    
+                    // k = length of match ending just before this position
+                    let k = if j > 0 {
+                        j2len[j - 1]
+                    } else {
+                        0
+                    };
+                    
+                    // We're extending the match by 1
+                    let newk = k + 1;
+                    newj2len[j] = newk;
+                    
+                    // Update best match if this is better
+                    if newk > bestsize {
+                        besti = i + 1 - newk;  // start of match in a
+                        bestj = j + 1 - newk;  // start of match in b
+                        bestsize = newk;
                     }
                 }
             }
+            
             j2len = newj2len;
         }
-
-        // Extend the best match to include equal elements on both sides
-        // (mirrors Python difflib behavior without isjunk)
-        while best_i > alo && best_j > blo && self.a[best_i - 1] == self.b[best_j - 1] {
-            best_i -= 1;
-            best_j -= 1;
-            best_size += 1;
+        
+        // Extend the best match as far as possible in both directions
+        // This handles the case where the match can be extended beyond
+        // the initial finding (important for correctness)
+        
+        // Extend backwards
+        while besti > alo && bestj > blo && self.a[besti - 1] == self.b[bestj - 1] {
+            besti -= 1;
+            bestj -= 1;
+            bestsize += 1;
         }
-        while best_i + best_size < ahi
-            && best_j + best_size < bhi
-            && self.a[best_i + best_size] == self.b[best_j + best_size]
-        {
-            best_size += 1;
+        
+        // Extend forwards
+        while besti + bestsize < ahi && bestj + bestsize < bhi && self.a[besti + bestsize] == self.b[bestj + bestsize] {
+            bestsize += 1;
         }
-
-        (best_i, best_j, best_size)
+        
+        (besti, bestj, bestsize)
     }
-    
-    // Alternative implementation using a more efficient approach for small changes
-    fn get_opcodes_efficient(&self) -> Vec<OpCode> {
-        if self.a == self.b {
-            if self.a.is_empty() {
-                return Vec::new();
-            }
-            return vec![OpCode {
-                tag: "equal".to_string(),
-                i1: 0,
-                i2: self.a.len(),
-                j1: 0,
-                j2: self.b.len(),
-            }];
-        }
-        
-        // For small changes in large files, use a more direct approach
-        let mut opcodes = Vec::new();
-        let mut i = 0;
-        let mut j = 0;
-        
-        while i < self.a.len() && j < self.b.len() {
-            if self.a[i] == self.b[j] {
-                // Found a match, extend it
-                let start_i = i;
-                let start_j = j;
-                while i < self.a.len() && j < self.b.len() && self.a[i] == self.b[j] {
-                    i += 1;
-                    j += 1;
-                }
-                opcodes.push(OpCode {
-                    tag: "equal".to_string(),
-                    i1: start_i,
-                    i2: i,
-                    j1: start_j,
-                    j2: j,
-                });
-            } else {
-                // Look ahead to find the next match
-                let mut found_match = false;
-                let mut next_i = i;
-                let mut next_j = j;
-                
-                // Look for the next matching line within a reasonable window
-                let window_size = 100.min(self.a.len() - i).min(self.b.len() - j);
-                
-                for di in 0..=window_size {
-                    for dj in 0..=window_size {
-                        if i + di < self.a.len() && j + dj < self.b.len() && self.a[i + di] == self.b[j + dj] {
-                            next_i = i + di;
-                            next_j = j + dj;
-                            found_match = true;
-                            break;
-                        }
-                    }
-                    if found_match {
-                        break;
-                    }
-                }
-                
-                if found_match {
-                    // Determine the type of change
-                    if next_i > i && next_j > j {
-                        // Replace
-                        opcodes.push(OpCode {
-                            tag: "replace".to_string(),
-                            i1: i,
-                            i2: next_i,
-                            j1: j,
-                            j2: next_j,
-                        });
-                    } else if next_i > i {
-                        // Delete
-                        opcodes.push(OpCode {
-                            tag: "delete".to_string(),
-                            i1: i,
-                            i2: next_i,
-                            j1: j,
-                            j2: j,
-                        });
-                    } else if next_j > j {
-                        // Insert
-                        opcodes.push(OpCode {
-                            tag: "insert".to_string(),
-                            i1: i,
-                            i2: i,
-                            j1: j,
-                            j2: next_j,
-                        });
-                    }
-                    i = next_i;
-                    j = next_j;
-                } else {
-                    // No more matches, handle the rest
-                    if i < self.a.len() && j < self.b.len() {
-                        opcodes.push(OpCode {
-                            tag: "replace".to_string(),
-                            i1: i,
-                            i2: self.a.len(),
-                            j1: j,
-                            j2: self.b.len(),
-                        });
-                    } else if i < self.a.len() {
-                        opcodes.push(OpCode {
-                            tag: "delete".to_string(),
-                            i1: i,
-                            i2: self.a.len(),
-                            j1: j,
-                            j2: j,
-                        });
-                    } else if j < self.b.len() {
-                        opcodes.push(OpCode {
-                            tag: "insert".to_string(),
-                            i1: i,
-                            i2: i,
-                            j1: j,
-                            j2: self.b.len(),
-                        });
-                    }
-                    break;
-                }
-            }
-        }
-        
-        // Handle remaining elements
-        if i < self.a.len() {
-            opcodes.push(OpCode {
-                tag: "delete".to_string(),
-                i1: i,
-                i2: self.a.len(),
-                j1: j,
-                j2: j,
-            });
-        } else if j < self.b.len() {
-            opcodes.push(OpCode {
-                tag: "insert".to_string(),
-                i1: i,
-                i2: i,
-                j1: j,
-                j2: self.b.len(),
-            });
-        }
-        
-        opcodes
-    }
+
 }
 
 fn format_range_unified(start: usize, stop: usize) -> String {
