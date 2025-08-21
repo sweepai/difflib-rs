@@ -9,8 +9,8 @@ This package provides a Rust-based implementation of the unified diff algorithm,
 ## Features
 
 - **Fast**: Rust implementation for better performance
-- **Compatible**: Drop-in replacement for `difflib.unified_diff`
-- **Tested**: Comprehensive test suite validating against Python's built-in implementation
+- **100% Compatible**: Drop-in replacement for `difflib.unified_diff` with identical output
+- **Thoroughly Tested**: Comprehensive test suite ensuring byte-for-byte compatibility with Python's implementation
 - **Easy to use**: Simple Python API with PyO3 bindings
 
 ## Performance

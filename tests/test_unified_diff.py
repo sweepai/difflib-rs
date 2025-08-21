@@ -108,61 +108,209 @@ def generate_random_lines(n: int, max_length: int = 20) -> list[str]:
     return lines
 
 
-def normalize_diff_output(lines: list[str]) -> list[str]:
-    """Normalize diff output for comparison by removing trailing whitespace and newlines."""
-    normalized = []
-    for line in lines:
-        # Remove trailing newlines and whitespace for comparison
-        normalized.append(line.rstrip('\n').rstrip())
-    return normalized
+def test_output_identical_to_python():
+    """Test that output is exactly identical to Python's difflib."""
+    test_cases = [
+        # Simple addition
+        (['line1', 'line3'], ['line1', 'line2', 'line3']),
+        # Simple deletion  
+        (['line1', 'line2', 'line3'], ['line1', 'line3']),
+        # Simple replacement
+        (['line1', 'old', 'line3'], ['line1', 'new', 'line3']),
+        # Empty to non-empty
+        ([], ['line1', 'line2']),
+        # Non-empty to empty
+        (['line1', 'line2'], []),
+        # Identical sequences
+        (['line1', 'line2'], ['line1', 'line2']),
+        # Complex changes
+        (['a', 'b', 'c', 'd', 'e'], ['a', 'x', 'c', 'y', 'e']),
+        # Large unchanged context
+        (['1', '2', '3', '4', '5', 'change_me', '7', '8', '9', '10'],
+         ['1', '2', '3', '4', '5', 'changed', '7', '8', '9', '10']),
+    ]
+    
+    for a, b in test_cases:
+        # Test with various parameter combinations
+        param_combinations = [
+            ('file_a', 'file_b', '', '', 3, '\n'),
+            ('original.txt', 'modified.txt', '2023-01-01', '2023-01-02', 3, '\n'),
+            ('a', 'b', '', '', 0, '\n'),
+            ('a', 'b', '', '', 5, '\n'),
+            ('test', 'test', '', '', 3, ''),
+        ]
+        
+        for fromfile, tofile, fromdate, todate, n, lineterm in param_combinations:
+            python_result = list(difflib.unified_diff(
+                a, b, fromfile, tofile, fromdate, todate, n, lineterm
+            ))
+            
+            rust_result = rust_unified_diff(
+                a, b, fromfile, tofile, fromdate, todate, n, lineterm
+            )
+            
+            # Check that outputs are EXACTLY identical
+            assert python_result == rust_result, (
+                f"Output mismatch for a={a}, b={b}, params=({fromfile}, {tofile}, {fromdate}, {todate}, {n}, {lineterm!r})\n"
+                f"Python: {python_result}\n"
+                f"Rust: {rust_result}"
+            )
 
 
-@pytest.mark.parametrize("seed", range(10))
+@pytest.mark.parametrize("seed", range(20))
 def test_against_python_builtin_random(seed):
-    """Test against Python's built-in difflib with random data."""
+    """Test against Python's built-in difflib with random data - exact match."""
     random.seed(seed)
     
     # Generate random sequences
-    a_len = random.randint(1, 20)
-    b_len = random.randint(1, 20)
+    a_len = random.randint(0, 30)
+    b_len = random.randint(0, 30)
     
-    a = generate_random_lines(a_len)
-    b = generate_random_lines(b_len)
+    a = generate_random_lines(a_len) if a_len > 0 else []
+    b = generate_random_lines(b_len) if b_len > 0 else []
     
-    # Get results from both implementations
-    python_result = list(difflib.unified_diff(
-        a, b, 'file_a', 'file_b', 
-        '2023-01-01', '2023-01-02', 
-        n=3, lineterm='\n'
-    ))
+    # Test with different context sizes
+    for n in [0, 1, 3, 5, 10]:
+        # Get results from both implementations
+        python_result = list(difflib.unified_diff(
+            a, b, 'file_a', 'file_b', 
+            '2023-01-01', '2023-01-02', 
+            n=n, lineterm='\n'
+        ))
+        
+        rust_result = rust_unified_diff(
+            a, b, 'file_a', 'file_b',
+            '2023-01-01', '2023-01-02',
+            n=n, lineterm='\n'
+        )
+        
+        # They should be EXACTLY identical
+        assert python_result == rust_result, (
+            f"Output mismatch for seed={seed}, n={n}\n"
+            f"a={a}\n"
+            f"b={b}\n"
+            f"Python result ({len(python_result)} lines): {python_result}\n"
+            f"Rust result ({len(rust_result)} lines): {rust_result}"
+        )
+
+
+def test_large_files_identical_output():
+    """Test that large files produce identical output to Python's difflib."""
+    random.seed(42)  # Fixed seed for reproducibility
     
-    rust_result = rust_unified_diff(
-        a, b, 'file_a', 'file_b',
-        '2023-01-01', '2023-01-02',
-        n=3, lineterm='\n'
-    )
+    # Test various sizes that were benchmarked
+    test_cases = [
+        # (num_lines, num_changes, description)
+        (100, 10, "Small file with 10% changes"),
+        (500, 50, "Medium file with 10% changes"),
+        (1000, 100, "Large file with 10% changes"),
+        (2000, 200, "Larger file with 10% changes"),
+        (5000, 5, "Large file with few changes"),
+        (5000, 250, "Large file with 5% changes"),
+        (1000, 500, "File with 50% changes"),
+    ]
     
-    # Normalize both results for comparison
-    python_normalized = normalize_diff_output(python_result)
-    rust_normalized = normalize_diff_output(rust_result)
+    for num_lines, num_changes, description in test_cases:
+        # Generate base file
+        base_lines = [f"Line {i:04d} - {'x' * (i % 10)}" for i in range(num_lines)]
+        
+        # Create modified version with specific number of changes
+        modified_lines = base_lines.copy()
+        change_indices = random.sample(range(num_lines), min(num_changes, num_lines))
+        
+        for idx in change_indices:
+            if random.random() < 0.33:
+                # Delete
+                if idx < len(modified_lines):
+                    modified_lines[idx] = None
+            elif random.random() < 0.66:
+                # Replace
+                modified_lines[idx] = f"Modified line {idx:04d} - {'y' * (idx % 10)}"
+            else:
+                # Insert (by duplicating with modification)
+                modified_lines[idx] = f"Inserted line {idx:04d} - {'z' * (idx % 10)}"
+        
+        # Remove None entries (deletions)
+        modified_lines = [line for line in modified_lines if line is not None]
+        
+        # Test with different context sizes
+        for n in [0, 3, 5]:
+            python_result = list(difflib.unified_diff(
+                base_lines, modified_lines,
+                'original.txt', 'modified.txt',
+                '2024-01-01', '2024-01-02',
+                n=n, lineterm='\n'
+            ))
+            
+            rust_result = rust_unified_diff(
+                base_lines, modified_lines,
+                'original.txt', 'modified.txt',
+                '2024-01-01', '2024-01-02',
+                n=n, lineterm='\n'
+            )
+            
+            assert python_result == rust_result, (
+                f"Output mismatch for {description}, n={n}\n"
+                f"File size: {num_lines} lines, {num_changes} changes\n"
+                f"Python result: {len(python_result)} lines\n"
+                f"Rust result: {len(rust_result)} lines\n"
+                f"First difference at line {next((i for i, (p, r) in enumerate(zip(python_result, rust_result)) if p != r), len(python_result))}"
+            )
+
+
+def test_edge_cases_identical_output():
+    """Test edge cases to ensure identical output to Python's difflib."""
+    test_cases = [
+        # Very long identical prefix and suffix with small change in middle
+        (
+            ['same'] * 100 + ['old'] + ['same'] * 100,
+            ['same'] * 100 + ['new'] + ['same'] * 100,
+            "Long identical prefix and suffix"
+        ),
+        # Many small scattered changes
+        (
+            [f"line{i}" if i % 10 != 0 else f"old{i}" for i in range(100)],
+            [f"line{i}" if i % 10 != 0 else f"new{i}" for i in range(100)],
+            "Many small scattered changes"
+        ),
+        # All lines changed
+        (
+            [f"old{i}" for i in range(50)],
+            [f"new{i}" for i in range(50)],
+            "All lines changed"
+        ),
+        # Lines with special characters
+        (
+            ['normal', 'has\ttab', 'has\nnewline', 'has"quote', "has'quote", 'has\\backslash'],
+            ['normal', 'no\ttab', 'no\nnewline', 'no"quote', "no'quote", 'no\\backslash'],
+            "Special characters"
+        ),
+        # Empty lines
+        (
+            ['line1', '', 'line3', '', '', 'line6'],
+            ['line1', '', '', 'line3', '', 'line6'],
+            "Empty lines"
+        ),
+    ]
     
-    # They should have the same number of lines
-    assert len(python_normalized) == len(rust_normalized), f"Length mismatch: Python={len(python_normalized)}, Rust={len(rust_normalized)}"
-    
-    # Compare line by line (allowing for minor formatting differences)
-    for i, (py_line, rust_line) in enumerate(zip(python_normalized, rust_normalized)):
-        # For content lines, they should be identical
-        if py_line.startswith(('+', '-', ' ')):
-            assert py_line == rust_line, f"Line {i} differs: Python='{py_line}', Rust='{rust_line}'"
-        # For header lines, check they have the same structure
-        elif py_line.startswith(('---', '+++')):
-            assert py_line.split('\t')[0] == rust_line.split('\t')[0], f"Header {i} differs: Python='{py_line}', Rust='{rust_line}'"
-        # For hunk headers, check they have the same ranges
-        elif py_line.startswith('@@'):
-            # Extract the ranges from both
-            py_ranges = py_line.split('@@')[1].strip()
-            rust_ranges = rust_line.split('@@')[1].strip()
-            assert py_ranges == rust_ranges, f"Hunk header {i} differs: Python='{py_ranges}', Rust='{rust_ranges}'"
+    for a, b, description in test_cases:
+        # Test with various parameters
+        for n in [0, 3, 5]:
+            for lineterm in ['\n', '']:
+                python_result = list(difflib.unified_diff(
+                    a, b, 'a.txt', 'b.txt', '', '', n, lineterm
+                ))
+                
+                rust_result = rust_unified_diff(
+                    a, b, 'a.txt', 'b.txt', '', '', n, lineterm
+                )
+                
+                assert python_result == rust_result, (
+                    f"Output mismatch for edge case: {description}\n"
+                    f"n={n}, lineterm={lineterm!r}\n"
+                    f"Python: {len(python_result)} lines\n"
+                    f"Rust: {len(rust_result)} lines"
+                )
 
 
 def test_known_examples():
@@ -183,14 +331,15 @@ def test_known_examples():
         lineterm=''
     )
     
-    # Normalize and compare
-    python_normalized = normalize_diff_output(python_result)
-    rust_normalized = normalize_diff_output(rust_result)
+    # Check for exact match
+    assert python_result == rust_result, (
+        f"Output mismatch for Python docs example\n"
+        f"Python result ({len(python_result)} lines): {python_result}\n"
+        f"Rust result ({len(rust_result)} lines): {rust_result}"
+    )
     
-    assert len(python_normalized) == len(rust_normalized)
-    
-    # Check that we have the expected changes
-    rust_content = '\n'.join(rust_normalized)
+    # Also check that we have the expected changes
+    rust_content = '\n'.join(rust_result)
     assert '+zero' in rust_content
     assert '-two' in rust_content
     assert '-three' in rust_content

@@ -74,14 +74,34 @@ impl<'a> SequenceMatcher<'a> {
         if codes.is_empty() {
             return Vec::new();
         }
+        
+        // Special case: only equal operations (no changes)
         if codes.len() == 1 && codes[0].tag == "equal" {
             return Vec::new();
         }
+        
+        // Fixup leading and trailing groups if they show no changes
+        // This matches Python's behavior to limit context lines
+        if !codes.is_empty() && codes[0].tag == "equal" {
+            let first = &mut codes[0];
+            first.i1 = first.i2.saturating_sub(n);
+            first.j1 = first.j2.saturating_sub(n);
+        }
+        
+        if !codes.is_empty() && codes[codes.len() - 1].tag == "equal" {
+            let last_idx = codes.len() - 1;
+            let last = &mut codes[last_idx];
+            last.i2 = (last.i1 + n).min(last.i2);
+            last.j2 = (last.j1 + n).min(last.j2);
+        }
+        
         let mut groups: Vec<Vec<OpCode>> = Vec::new();
         let mut group: Vec<OpCode> = Vec::new();
+        let nn = 2 * n;
 
-        if n == 0 {
-            for code in codes.drain(..) {
+        for code in codes.drain(..) {
+            // Handle n == 0 case: split on any equal operations
+            if n == 0 {
                 if code.tag == "equal" && code.i2 > code.i1 {
                     if !group.is_empty() {
                         groups.push(std::mem::take(&mut group));
@@ -90,38 +110,37 @@ impl<'a> SequenceMatcher<'a> {
                 }
                 group.push(code);
             }
-            if !group.is_empty() {
-                groups.push(group);
-            }
-            return groups;
-        }
-
-        for code in codes.drain(..) {
-            if code.tag == "equal" && code.i2 - code.i1 > 2 * n {
+            // Handle n > 0 case: split on large equal operations
+            else if code.tag == "equal" && code.i2 - code.i1 > nn {
+                // End current group with trailing context
                 if !group.is_empty() {
                     group.push(OpCode {
                         tag: "equal".to_string(),
                         i1: code.i1,
-                        i2: code.i1 + n,
+                        i2: (code.i1 + n).min(code.i2),
                         j1: code.j1,
-                        j2: code.j1 + n,
+                        j2: (code.j1 + n).min(code.j2),
                     });
                     groups.push(std::mem::take(&mut group));
                 }
+                // Start new group with leading context
                 group.push(OpCode {
                     tag: "equal".to_string(),
-                    i1: code.i2 - n,
+                    i1: code.i2.saturating_sub(n).max(code.i1),
                     i2: code.i2,
-                    j1: code.j2 - n,
+                    j1: code.j2.saturating_sub(n).max(code.j1),
                     j2: code.j2,
                 });
             } else {
                 group.push(code);
             }
         }
-        if !group.is_empty() {
+        
+        // Add final group if it exists and isn't just an equal operation
+        if !group.is_empty() && !(group.len() == 1 && group[0].tag == "equal") {
             groups.push(group);
         }
+        
         groups
     }
 
