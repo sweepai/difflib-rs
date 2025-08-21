@@ -10,19 +10,19 @@ struct OpCode {
     j2: usize,
 }
 
-struct SequenceMatcher {
-    a: Vec<String>,
-    b: Vec<String>,
-    b2j: HashMap<String, Vec<usize>>,
+struct SequenceMatcher<'a> {
+    a: &'a [String],
+    b: &'a [String],
+    b2j: HashMap<&'a str, Vec<usize>>,
     matching_blocks: Option<Vec<(usize, usize, usize)>>,
     opcodes: Option<Vec<OpCode>>,
 }
 
-impl SequenceMatcher {
-    fn new(a: Vec<String>, b: Vec<String>) -> Self {
+impl<'a> SequenceMatcher<'a> {
+    fn new(a: &'a [String], b: &'a [String]) -> Self {
         let mut matcher = Self {
             a,
-            b: Vec::new(),
+            b: &[],
             b2j: HashMap::new(),
             matching_blocks: None,
             opcodes: None,
@@ -31,8 +31,8 @@ impl SequenceMatcher {
         matcher
     }
     
-    fn set_seq2(&mut self, b: Vec<String>) {
-        if self.b == b {
+    fn set_seq2(&mut self, b: &'a [String]) {
+        if self.b.as_ptr() == b.as_ptr() && self.b.len() == b.len() {
             return;
         }
         self.b = b;
@@ -47,7 +47,7 @@ impl SequenceMatcher {
         
         // Build b2j mapping like Python's difflib
         for (i, elt) in b.iter().enumerate() {
-            self.b2j.entry(elt.clone()).or_insert_with(Vec::new).push(i);
+            self.b2j.entry(elt.as_str()).or_insert_with(Vec::new).push(i);
         }
         
         // Apply popularity heuristic like Python's difflib
@@ -57,14 +57,14 @@ impl SequenceMatcher {
             let ntest = n / 100 + 1;
             let mut popular_elements = Vec::new();
             
-            for (elt, indices) in &self.b2j {
+            for (&elt, indices) in &self.b2j {
                 if indices.len() > ntest {
-                    popular_elements.push(elt.clone());
+                    popular_elements.push(elt);
                 }
             }
             
             for elt in popular_elements {
-                self.b2j.remove(&elt);
+                self.b2j.remove(elt);
             }
         }
     }
@@ -177,55 +177,21 @@ impl SequenceMatcher {
     }
 
     fn get_matching_blocks(&self) -> Vec<(usize, usize, usize)> {
-        // Optimized implementation with early prefix/suffix matching
+        // Simple implementation following Python's difflib exactly
         let mut matches: Vec<(usize, usize, usize)> = Vec::new();
-        
-        // First, find common prefix
-        let mut prefix_len = 0;
-        while prefix_len < self.a.len() && prefix_len < self.b.len() && self.a[prefix_len] == self.b[prefix_len] {
-            prefix_len += 1;
-        }
-        
-        // Find common suffix (excluding the prefix we already found)
-        let mut suffix_len = 0;
-        let a_remaining = self.a.len() - prefix_len;
-        let b_remaining = self.b.len() - prefix_len;
-        while suffix_len < a_remaining && suffix_len < b_remaining 
-              && self.a[self.a.len() - 1 - suffix_len] == self.b[self.b.len() - 1 - suffix_len] {
-            suffix_len += 1;
-        }
-        
-        // Add prefix match if it exists
-        if prefix_len > 0 {
-            matches.push((0, 0, prefix_len));
-        }
-        
-        // If there's a middle section, process it recursively
-        let a_start = prefix_len;
-        let a_end = self.a.len() - suffix_len;
-        let b_start = prefix_len;
-        let b_end = self.b.len() - suffix_len;
-        
-        if a_start < a_end || b_start < b_end {
-            let mut stack: Vec<(usize, usize, usize, usize)> = vec![(a_start, a_end, b_start, b_end)];
+        let mut stack: Vec<(usize, usize, usize, usize)> = vec![(0, self.a.len(), 0, self.b.len())];
 
-            while let Some((alo, ahi, blo, bhi)) = stack.pop() {
-                let (i, j, k) = self.find_longest_match(alo, ahi, blo, bhi);
-                if k > 0 {
-                    matches.push((i, j, k));
-                    if alo < i && blo < j {
-                        stack.push((alo, i, blo, j));
-                    }
-                    if i + k < ahi && j + k < bhi {
-                        stack.push((i + k, ahi, j + k, bhi));
-                    }
+        while let Some((alo, ahi, blo, bhi)) = stack.pop() {
+            let (i, j, k) = self.find_longest_match(alo, ahi, blo, bhi);
+            if k > 0 {
+                matches.push((i, j, k));
+                if alo < i && blo < j {
+                    stack.push((alo, i, blo, j));
+                }
+                if i + k < ahi && j + k < bhi {
+                    stack.push((i + k, ahi, j + k, bhi));
                 }
             }
-        }
-        
-        // Add suffix match if it exists
-        if suffix_len > 0 {
-            matches.push((self.a.len() - suffix_len, self.b.len() - suffix_len, suffix_len));
         }
 
         // Sort by positions (i, j)
@@ -255,16 +221,16 @@ impl SequenceMatcher {
         let mut bestj = blo;
         let mut bestsize = 0;
         
-        // Use Vec instead of HashMap for better performance
-        // j2len[j] = length of longest match ending with a[i-1] and b[j]
+        // Pre-allocate buffers once and reuse them (major optimization)
         let mut j2len = vec![0usize; self.b.len()];
+        let mut newj2len = vec![0usize; self.b.len()];
         
         for i in alo..ahi {
-            // For the current line a[i], we'll build a new j2len
-            let mut newj2len = vec![0usize; self.b.len()];
+            // Clear the buffer instead of allocating new
+            newj2len.fill(0);
             
             // Get all positions where a[i] appears in b
-            if let Some(indices) = self.b2j.get(&self.a[i]) {
+            if let Some(indices) = self.b2j.get(self.a[i].as_str()) {
                 for &j in indices {
                     // Skip if j is outside our range
                     if j < blo {
@@ -294,7 +260,8 @@ impl SequenceMatcher {
                 }
             }
             
-            j2len = newj2len;
+            // Swap buffers instead of cloning
+            std::mem::swap(&mut j2len, &mut newj2len);
         }
         
         // Extend the best match as far as possible in both directions
@@ -348,7 +315,7 @@ fn unified_diff(
     }
     
     let mut result = Vec::new();
-    let matcher = SequenceMatcher::new(a.clone(), b.clone());
+    let matcher = SequenceMatcher::new(&a, &b);
     let groups = matcher.get_grouped_opcodes(n);
 
     // If no groups (no differences), return empty
