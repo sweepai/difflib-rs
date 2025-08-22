@@ -1,5 +1,5 @@
 [project]
-name = "difflib-rs"
+name = "sweepai-difflib-rs"
 version = "0.1.0"
 description = "A Rust implementation of Python's difflib.unified_diff with PyO3 bindings"
 readme = "README.md"
