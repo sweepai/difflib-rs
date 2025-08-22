@@ -1,6 +1,6 @@
 [project]
 name = "difflib-rs"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Rust implementation of Python's difflib.unified_diff with PyO3 bindings"
 readme = "README.md"
 requires-python = ">=3.10"
