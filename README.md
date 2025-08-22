@@ -70,10 +70,25 @@ The performance improvements come from:
 
 ## Installation
 
+### From TestPyPI (current release)
 ```bash
-# Build from source
+pip install -i https://test.pypi.org/simple/ difflib-rs
+```
+
+### Build from source
+```bash
+# Clone the repository
+git clone https://github.com/sweepai/difflib-rs.git
+cd difflib-rs
+
+# Set up virtual environment
+python -m venv venv
 source venv/bin/activate
+
+# Install build dependencies
 pip install maturin pytest
+
+# Build and install
 maturin develop --release
 ```
 
