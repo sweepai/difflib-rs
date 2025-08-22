@@ -360,38 +360,78 @@ fn format_range_unified(start: usize, stop: usize) -> String {
 
 /// Split a string into lines, handling various line endings
 fn split_lines(text: &str, keepends: bool) -> Vec<String> {
-    let mut lines = Vec::new();
-    let mut current = String::new();
-    let mut chars = text.chars().peekable();
-    
-    while let Some(ch) = chars.next() {
-        if ch == '\r' {
-            if keepends {
-                current.push('\r');
-            }
-            // Check for \r\n
-            if chars.peek() == Some(&'\n') {
-                chars.next();
-                if keepends {
-                    current.push('\n');
-                }
-            }
-            lines.push(current.clone());
-            current.clear();
-        } else if ch == '\n' {
-            if keepends {
-                current.push('\n');
-            }
-            lines.push(current.clone());
-            current.clear();
-        } else {
-            current.push(ch);
-        }
+    // Fast path for empty strings
+    if text.is_empty() {
+        return Vec::new();
     }
     
-    // Don't forget the last line if it doesn't end with a newline
-    if !current.is_empty() {
-        lines.push(current);
+    // Pre-allocate based on estimated line count (similar to CPython's approach)
+    // Estimate: assume average line length of 80 chars
+    let estimated_lines = (text.len() / 80).max(1).min(text.len());
+    let mut lines = Vec::with_capacity(estimated_lines);
+    
+    let bytes = text.as_bytes();
+    let mut start = 0;
+    let mut i = 0;
+    
+    while i < bytes.len() {
+        // Find the end of the current line
+        let line_start = start;
+        
+        // Scan for line breaks (optimized byte-level scanning)
+        while i < bytes.len() && bytes[i] != b'\n' && bytes[i] != b'\r' {
+            i += 1;
+        }
+        
+        let mut eol = i;  // End of line content
+        
+        if i < bytes.len() {
+            // Handle different line ending types
+            if bytes[i] == b'\r' {
+                if i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
+                    // \r\n case
+                    i += 2;
+                    if keepends {
+                        eol = i;
+                    }
+                } else {
+                    // \r case
+                    i += 1;
+                    if keepends {
+                        eol = i;
+                    }
+                }
+            } else if bytes[i] == b'\n' {
+                // \n case
+                i += 1;
+                if keepends {
+                    eol = i;
+                }
+            }
+        }
+        
+        // Extract the line using slice operations (much faster than char-by-char)
+        let line = if eol > line_start {
+            // Safe version: validate UTF-8 (though we know it's valid)
+            std::str::from_utf8(&bytes[line_start..eol])
+                .expect("Invalid UTF-8 in string slice")
+                .to_string()
+        } else {
+            String::new()
+        };
+        
+        lines.push(line);
+        start = i;
+    }
+    
+    // Handle case where text doesn't end with a newline
+    if start < bytes.len() {
+        let line = std::str::from_utf8(&bytes[start..])
+            .expect("Invalid UTF-8 in string slice")
+            .to_string();
+        if !line.is_empty() {
+            lines.push(line);
+        }
     }
     
     lines

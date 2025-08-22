@@ -136,12 +136,22 @@ def test_performance_vs_python_split():
     result_list = unified_diff(lines_a, lines_b)
     time_list = time.time() - start
     
+    # Calculate speedup
+    speedup = time_list / time_str if time_str > 0 else float('inf')
+    
+    # Print detailed comparison
+    print(f"\n--- Performance Comparison (1000 lines, 10% changes) ---")
+    print(f"unified_diff_str:                 {time_str:.6f}s")
+    print(f"unified_diff + Python splitlines: {time_list:.6f}s")
+    print(f"Speedup (unified_diff_str):       {speedup:.2f}x {'FASTER' if speedup > 1 else 'SLOWER'}")
+    print(f"Result size: {len(result_str)} lines (str) vs {len(result_list)} lines (list)")
+    
     # Results should be the same
     assert len(result_str) == len(result_list)
     
     # Performance should be reasonable (not necessarily faster due to overhead)
     # But should be within an order of magnitude
-    assert time_str < time_list * 10, f"String version too slow: {time_str:.4f}s vs {time_list:.4f}s"
+    assert time_str < time_list * 10, f"String version too slow: {time_str:.6f}s vs {time_list:.6f}s"
 
 
 def test_with_all_parameters():
@@ -235,10 +245,10 @@ def modify_text_str(text: str, modification_ratio: float = 0.1) -> str:
     return '\n'.join(modified)
 
 
-def python_unified_diff_str(text_a: str, text_b: str, fromfile: str = '', tofile: str = '',
+def python_split_rust_diff(text_a: str, text_b: str, fromfile: str = '', tofile: str = '',
                           fromfiledate: str = '', tofiledate: str = '', n: int = 3,
                           lineterm: str = '\n', keepends: bool = False) -> list[str]:
-    """Python implementation using difflib with string splitting included."""
+    """Rust unified_diff with Python splitlines (to isolate split performance)."""
     if keepends:
         lines_a = text_a.splitlines(keepends=True)
         lines_b = text_b.splitlines(keepends=True)
@@ -246,9 +256,8 @@ def python_unified_diff_str(text_a: str, text_b: str, fromfile: str = '', tofile
         lines_a = text_a.splitlines()
         lines_b = text_b.splitlines()
     
-    return list(difflib.unified_diff(
-        lines_a, lines_b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm
-    ))
+    # Use Rust unified_diff with Python-split lines
+    return unified_diff(lines_a, lines_b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm)
 
 
 def time_function(func, *args, **kwargs):
@@ -268,32 +277,32 @@ def test_unified_diff_str_speed_comparison_small_changes(num_lines):
     original = generate_large_text_str(num_lines)
     modified = modify_text_str(original, modification_ratio=0.1)
     
-    # Time Python implementation (including split)
-    python_result, python_time = time_function(
-        python_unified_diff_str, original, modified, 'original', 'modified'
+    # Time Rust unified_diff with Python splitlines (baseline)
+    baseline_result, baseline_time = time_function(
+        python_split_rust_diff, original, modified, 'original', 'modified'
     )
     
-    # Time Rust implementation
-    rust_result, rust_time = time_function(
+    # Time Rust unified_diff_str (optimized - includes Rust split_lines)
+    optimized_result, optimized_time = time_function(
         unified_diff_str, original, modified, 'original', 'modified'
     )
     
     # Calculate speedup
-    speedup = python_time / rust_time if rust_time > 0 else float('inf')
+    speedup = baseline_time / optimized_time if optimized_time > 0 else float('inf')
     
-    print(f"\n--- unified_diff_str Benchmark ({num_lines} lines, 10% changes) ---")
-    print(f"Python time (with split): {python_time:.4f}s")
-    print(f"Rust time:                {rust_time:.4f}s")
-    print(f"Speedup:                  {speedup:.2f}x")
-    print(f"Python lines: {len(python_result)}")
-    print(f"Rust lines:   {len(rust_result)}")
+    print(f"\n--- unified_diff_str vs Rust unified_diff Benchmark ({num_lines} lines, 10% changes) ---")
+    print(f"Rust unified_diff + Python split: {baseline_time:.4f}s")
+    print(f"Rust unified_diff_str (all Rust): {optimized_time:.4f}s")
+    print(f"Speedup (optimized split):        {speedup:.2f}x {'FASTER' if speedup > 1 else 'SLOWER'}")
+    print(f"Baseline lines: {len(baseline_result)}")
+    print(f"Optimized lines: {len(optimized_result)}")
     
-    # Verify results are similar (allow some differences in formatting)
-    assert abs(len(python_result) - len(rust_result)) <= 10, "Results should be similar length"
+    # Verify results are identical 
+    assert len(baseline_result) == len(optimized_result), "Results should be identical length"
     
-    # Performance assertion - Rust should be competitive
+    # Performance assertion - optimized version should be competitive
     if num_lines >= 1000:
-        assert rust_time <= python_time * 5, f"Rust should be reasonably competitive for large datasets"
+        assert optimized_time <= baseline_time * 2, f"Optimized version should be reasonably competitive for large datasets"
 
 
 @pytest.mark.parametrize("num_lines", [100, 500, 1000])
