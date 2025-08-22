@@ -1,11 +1,11 @@
 """Test the unified_diff_str function."""
 
 import pytest
-import time
 import difflib
 import random
 import string
 from difflib_rs import unified_diff, unified_diff_str
+from utils import Timer
 
 
 def test_basic_functionality():
@@ -125,24 +125,24 @@ def test_performance_vs_python_split():
     large_b = "\n".join([f"Line {i}" if i % 10 != 0 else f"Modified Line {i}" for i in range(1000)])
     
     # Time the string version
-    start = time.time()
-    result_str = unified_diff_str(large_a, large_b)
-    time_str = time.time() - start
+    with Timer() as str_timer:
+        result_str = unified_diff_str(large_a, large_b)
+    time_str = str_timer.elapsed
     
     # Time the list version (including split time)
-    start = time.time()
-    lines_a = large_a.splitlines()
-    lines_b = large_b.splitlines()
-    result_list = unified_diff(lines_a, lines_b)
-    time_list = time.time() - start
+    with Timer() as list_timer:
+        lines_a = large_a.splitlines()
+        lines_b = large_b.splitlines()
+        result_list = unified_diff(lines_a, lines_b)
+    time_list = list_timer.elapsed
     
     # Calculate speedup
     speedup = time_list / time_str if time_str > 0 else float('inf')
     
     # Print detailed comparison
     print(f"\n--- Performance Comparison (1000 lines, 10% changes) ---")
-    print(f"unified_diff_str:                 {time_str:.6f}s")
-    print(f"unified_diff + Python splitlines: {time_list:.6f}s")
+    print(f"unified_diff_str:                 {time_str:.1f}μs")
+    print(f"unified_diff + Python splitlines: {time_list:.1f}μs")
     print(f"Speedup (unified_diff_str):       {speedup:.2f}x {'FASTER' if speedup > 1 else 'SLOWER'}")
     print(f"Result size: {len(result_str)} lines (str) vs {len(result_list)} lines (list)")
     
@@ -260,12 +260,7 @@ def python_split_rust_diff(text_a: str, text_b: str, fromfile: str = '', tofile:
     return unified_diff(lines_a, lines_b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm)
 
 
-def time_function(func, *args, **kwargs):
-    """Time a function execution and return (result, elapsed_time)."""
-    start_time = time.perf_counter()
-    result = func(*args, **kwargs)
-    end_time = time.perf_counter()
-    return result, end_time - start_time
+
 
 
 @pytest.mark.parametrize("num_lines", [100, 500, 1000, 2000])
@@ -278,21 +273,21 @@ def test_unified_diff_str_speed_comparison_small_changes(num_lines):
     modified = modify_text_str(original, modification_ratio=0.1)
     
     # Time Rust unified_diff with Python splitlines (baseline)
-    baseline_result, baseline_time = time_function(
-        python_split_rust_diff, original, modified, 'original', 'modified'
-    )
+    with Timer() as baseline_timer:
+        baseline_result = python_split_rust_diff(original, modified, 'original', 'modified')
+    baseline_time = baseline_timer.elapsed
     
     # Time Rust unified_diff_str (optimized - includes Rust split_lines)
-    optimized_result, optimized_time = time_function(
-        unified_diff_str, original, modified, 'original', 'modified'
-    )
+    with Timer() as optimized_timer:
+        optimized_result = unified_diff_str(original, modified, 'original', 'modified')
+    optimized_time = optimized_timer.elapsed
     
     # Calculate speedup
     speedup = baseline_time / optimized_time if optimized_time > 0 else float('inf')
     
     print(f"\n--- unified_diff_str vs Rust unified_diff Benchmark ({num_lines} lines, 10% changes) ---")
-    print(f"Rust unified_diff + Python split: {baseline_time:.4f}s")
-    print(f"Rust unified_diff_str (all Rust): {optimized_time:.4f}s")
+    print(f"Rust unified_diff + Python split: {baseline_time:.1f}μs")
+    print(f"Rust unified_diff_str (all Rust): {optimized_time:.1f}μs")
     print(f"Speedup (optimized split):        {speedup:.2f}x {'FASTER' if speedup > 1 else 'SLOWER'}")
     print(f"Baseline lines: {len(baseline_result)}")
     print(f"Optimized lines: {len(optimized_result)}")
@@ -315,21 +310,21 @@ def test_unified_diff_str_speed_comparison_large_changes(num_lines):
     modified = modify_text_str(original, modification_ratio=0.5)
     
     # Time Python implementation (including split)
-    python_result, python_time = time_function(
-        python_unified_diff_str, original, modified, 'original', 'modified'
-    )
+    with Timer() as python_timer:
+        python_result = python_split_rust_diff(original, modified, 'original', 'modified')
+    python_time = python_timer.elapsed
     
     # Time Rust implementation
-    rust_result, rust_time = time_function(
-        unified_diff_str, original, modified, 'original', 'modified'
-    )
+    with Timer() as rust_timer:
+        rust_result = unified_diff_str(original, modified, 'original', 'modified')
+    rust_time = rust_timer.elapsed
     
     # Calculate speedup
     speedup = python_time / rust_time if rust_time > 0 else float('inf')
     
     print(f"\n--- unified_diff_str Benchmark ({num_lines} lines, 50% changes) ---")
-    print(f"Python time (with split): {python_time:.4f}s")
-    print(f"Rust time:                {rust_time:.4f}s")
+    print(f"Python time (with split): {python_time:.1f}μs")
+    print(f"Rust time:                {rust_time:.1f}μs")
     print(f"Speedup:                  {speedup:.2f}x")
     print(f"Python lines: {len(python_result)}")
     print(f"Rust lines:   {len(rust_result)}")
@@ -344,14 +339,14 @@ def test_unified_diff_str_speed_identical_sequences():
     text = generate_large_text_str(5000)
     
     # Time Python implementation (including split)
-    python_result, python_time = time_function(
-        python_unified_diff_str, text, text, 'a', 'b'
-    )
+    with Timer() as python_timer:
+        python_result = python_split_rust_diff(text, text, 'a', 'b')
+    python_time = python_timer.elapsed
     
     # Time Rust implementation
-    rust_result, rust_time = time_function(
-        unified_diff_str, text, text, 'a', 'b'
-    )
+    with Timer() as rust_timer:
+        rust_result = unified_diff_str(text, text, 'a', 'b')
+    rust_time = rust_timer.elapsed
     
     print(f"\n--- unified_diff_str Identical Sequences Benchmark (5000 lines) ---")
     print(f"Python time (with split): {python_time:.6f}s")
@@ -388,21 +383,21 @@ def test_unified_diff_str_small_changes_large_files():
         modified = '\n'.join(lines)
         
         # Time Python implementation (including split)
-        python_result, python_time = time_function(
-            python_unified_diff_str, original, modified, 'original', 'modified'
-        )
+        with Timer() as python_timer:
+            python_result = python_split_rust_diff(original, modified, 'original', 'modified')
+        python_time = python_timer.elapsed
         
         # Time Rust implementation
-        rust_result, rust_time = time_function(
-            unified_diff_str, original, modified, 'original', 'modified'
-        )
+        with Timer() as rust_timer:
+            rust_result = unified_diff_str(original, modified, 'original', 'modified')
+        rust_time = rust_timer.elapsed
         
         # Calculate speedup
         speedup = python_time / rust_time if rust_time > 0 else float('inf')
         
         print(f"\n  {num_lines} lines, {num_changes} changes:")
-        print(f"    Python time (with split): {python_time:.4f}s")
-        print(f"    Rust time:                {rust_time:.4f}s")
+        print(f"    Python time (with split): {python_time:.1f}μs")
+        print(f"    Rust time:                {rust_time:.1f}μs")
         print(f"    Speedup:                  {speedup:.2f}x")
         print(f"    Diff size: {len(python_result)} lines (Python), {len(rust_result)} lines (Rust)")
         
@@ -436,17 +431,17 @@ def test_unified_diff_str_keepends_performance():
     modified = ''.join(modified_lines)
     
     # Test keepends=False
-    result_false, time_false = time_function(
-        unified_diff_str, original, modified, 'original', 'modified', keepends=False
-    )
+    with Timer() as timer_false:
+        result_false = unified_diff_str(original, modified, 'original', 'modified', keepends=False)
+    time_false = timer_false.elapsed
     
     # Test keepends=True
-    result_true, time_true = time_function(
-        unified_diff_str, original, modified, 'original', 'modified', keepends=True
-    )
+    with Timer() as timer_true:
+        result_true = unified_diff_str(original, modified, 'original', 'modified', keepends=True)
+    time_true = timer_true.elapsed
     
-    print(f"  keepends=False: {time_false:.4f}s, {len(result_false)} lines")
-    print(f"  keepends=True:  {time_true:.4f}s, {len(result_true)} lines")
+    print(f"  keepends=False: {time_false:.1f}μs, {len(result_false)} lines")
+    print(f"  keepends=True:  {time_true:.1f}μs, {len(result_true)} lines")
     print(f"  Ratio: {time_true/time_false:.2f}x")
     
     # Both should complete successfully
@@ -480,21 +475,21 @@ def test_unified_diff_str_keepends_vs_baseline(keepends):
     modified = ''.join(modified_lines)
     
     # Time baseline: Python splitlines + Rust unified_diff
-    baseline_result, baseline_time = time_function(
-        python_split_rust_diff, original, modified, 'original', 'modified', keepends=keepends
-    )
+    with Timer() as baseline_timer:
+        baseline_result = python_split_rust_diff(original, modified, 'original', 'modified', keepends=keepends)
+    baseline_time = baseline_timer.elapsed
     
     # Time optimized: Rust unified_diff_str
-    optimized_result, optimized_time = time_function(
-        unified_diff_str, original, modified, 'original', 'modified', keepends=keepends
-    )
+    with Timer() as optimized_timer:
+        optimized_result = unified_diff_str(original, modified, 'original', 'modified', keepends=keepends)
+    optimized_time = optimized_timer.elapsed
     
     # Calculate speedup
     speedup = baseline_time / optimized_time if optimized_time > 0 else float('inf')
     
     print(f"\n--- keepends={keepends} Performance (1000 lines, mixed endings) ---")
-    print(f"Python split + Rust diff: {baseline_time:.4f}s")
-    print(f"Rust unified_diff_str:    {optimized_time:.4f}s")
+    print(f"Python split + Rust diff: {baseline_time:.1f}μs")
+    print(f"Rust unified_diff_str:    {optimized_time:.1f}μs")
     print(f"Speedup:                  {speedup:.2f}x {'FASTER' if speedup > 1 else 'SLOWER'}")
     print(f"Result size: {len(baseline_result)} vs {len(optimized_result)} lines")
     

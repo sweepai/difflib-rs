@@ -1,9 +1,9 @@
 import pytest
 import difflib
-import time
 import random
 import string
 from difflib_rs import unified_diff as rust_unified_diff
+from utils import Timer
 
 
 def generate_large_text(num_lines: int, line_length: int = 80) -> list[str]:
@@ -36,12 +36,7 @@ def modify_text(lines: list[str], modification_ratio: float = 0.1) -> list[str]:
     return modified
 
 
-def time_function(func, *args, **kwargs):
-    """Time a function execution and return (result, elapsed_time)."""
-    start_time = time.perf_counter()
-    result = func(*args, **kwargs)
-    end_time = time.perf_counter()
-    return result, end_time - start_time
+
 
 
 class TestBenchmark:
@@ -59,21 +54,21 @@ class TestBenchmark:
         modified = modify_text(original, modification_ratio=0.1)
         
         # Time Python implementation
-        python_result, python_time = time_function(
-            lambda: list(difflib.unified_diff(original, modified, 'original', 'modified'))
-        )
+        with Timer() as python_timer:
+            python_result = list(difflib.unified_diff(original, modified, 'original', 'modified'))
+        python_time = python_timer.elapsed
         
         # Time Rust implementation
-        rust_result, rust_time = time_function(
-            rust_unified_diff, original, modified, 'original', 'modified'
-        )
+        with Timer() as rust_timer:
+            rust_result = rust_unified_diff(original, modified, 'original', 'modified')
+        rust_time = rust_timer.elapsed
         
         # Calculate speedup
         speedup = python_time / rust_time if rust_time > 0 else float('inf')
         
         print(f"\n--- Benchmark Results ({num_lines} lines, 10% changes) ---")
-        print(f"Python time: {python_time:.4f}s")
-        print(f"Rust time:   {rust_time:.4f}s")
+        print(f"Python time: {python_time:.1f}μs")
+        print(f"Rust time:   {rust_time:.1f}μs")
         print(f"Speedup:     {speedup:.2f}x")
         print(f"Python lines: {len(python_result)}")
         print(f"Rust lines:   {len(rust_result)}")
@@ -94,21 +89,21 @@ class TestBenchmark:
         modified = modify_text(original, modification_ratio=0.5)
         
         # Time Python implementation
-        python_result, python_time = time_function(
-            lambda: list(difflib.unified_diff(original, modified, 'original', 'modified'))
-        )
+        with Timer() as python_timer:
+            python_result = list(difflib.unified_diff(original, modified, 'original', 'modified'))
+        python_time = python_timer.elapsed
         
         # Time Rust implementation
-        rust_result, rust_time = time_function(
-            rust_unified_diff, original, modified, 'original', 'modified'
-        )
+        with Timer() as rust_timer:
+            rust_result = rust_unified_diff(original, modified, 'original', 'modified')
+        rust_time = rust_timer.elapsed
         
         # Calculate speedup
         speedup = python_time / rust_time if rust_time > 0 else float('inf')
         
         print(f"\n--- Benchmark Results ({num_lines} lines, 50% changes) ---")
-        print(f"Python time: {python_time:.4f}s")
-        print(f"Rust time:   {rust_time:.4f}s")
+        print(f"Python time: {python_time:.1f}μs")
+        print(f"Rust time:   {rust_time:.1f}μs")
         print(f"Speedup:     {speedup:.2f}x")
         print(f"Python lines: {len(python_result)}")
         print(f"Rust lines:   {len(rust_result)}")
@@ -122,18 +117,18 @@ class TestBenchmark:
         lines = generate_large_text(5000)
         
         # Time Python implementation
-        python_result, python_time = time_function(
-            lambda: list(difflib.unified_diff(lines, lines, 'a', 'b'))
-        )
+        with Timer() as python_timer:
+            python_result = list(difflib.unified_diff(lines, lines, 'a', 'b'))
+        python_time = python_timer.elapsed
         
         # Time Rust implementation
-        rust_result, rust_time = time_function(
-            rust_unified_diff, lines, lines, 'a', 'b'
-        )
+        with Timer() as rust_timer:
+            rust_result = rust_unified_diff(lines, lines, 'a', 'b')
+        rust_time = rust_timer.elapsed
         
         print(f"\n--- Identical Sequences Benchmark (5000 lines) ---")
-        print(f"Python time: {python_time:.6f}s")
-        print(f"Rust time:   {rust_time:.6f}s")
+        print(f"Python time: {python_time:.1f}μs")
+        print(f"Rust time:   {rust_time:.1f}μs")
         print(f"Python result: {len(python_result)} lines")
         print(f"Rust result:   {len(rust_result)} lines")
         
@@ -141,8 +136,8 @@ class TestBenchmark:
         assert len(python_result) == 0
         assert len(rust_result) == 0
         
-        # Rust should be very fast for identical sequences
-        assert rust_time < 0.01, "Rust should handle identical sequences very quickly"
+        # Rust should be very fast for identical sequences (under 10,000 microseconds = 10ms)
+        assert rust_time < 10000, "Rust should handle identical sequences very quickly"
     
     def test_small_changes_large_files(self):
         """Test performance with small changes in very large files."""
@@ -162,21 +157,21 @@ class TestBenchmark:
                 modified[idx] = modified[idx][:40] + " MODIFIED " + modified[idx][40:]
             
             # Time Python implementation
-            python_result, python_time = time_function(
-                lambda: list(difflib.unified_diff(original, modified, 'original', 'modified'))
-            )
+            with Timer() as python_timer:
+                python_result = list(difflib.unified_diff(original, modified, 'original', 'modified'))
+            python_time = python_timer.elapsed
             
             # Time Rust implementation
-            rust_result, rust_time = time_function(
-                rust_unified_diff, original, modified, 'original', 'modified'
-            )
+            with Timer() as rust_timer:
+                rust_result = rust_unified_diff(original, modified, 'original', 'modified')
+            rust_time = rust_timer.elapsed
             
             # Calculate speedup
             speedup = python_time / rust_time if rust_time > 0 else float('inf')
             
             print(f"\n  {num_lines} lines, {num_changes} changes:")
-            print(f"    Python time: {python_time:.4f}s")
-            print(f"    Rust time:   {rust_time:.4f}s")
+            print(f"    Python time: {python_time:.1f}μs")
+            print(f"    Rust time:   {rust_time:.1f}μs")
             print(f"    Speedup:     {speedup:.2f}x")
             print(f"    Diff size:   {len(python_result)} lines (Python), {len(rust_result)} lines (Rust)")
             
@@ -201,21 +196,21 @@ class TestBenchmark:
                 modified[idx] = modified[idx][:30] + " CHANGED " + modified[idx][30:]
             
             # Time Python implementation
-            python_result, python_time = time_function(
-                lambda: list(difflib.unified_diff(original, modified, 'original', 'modified'))
-            )
+            with Timer() as python_timer:
+                python_result = list(difflib.unified_diff(original, modified, 'original', 'modified'))
+            python_time = python_timer.elapsed
             
             # Time Rust implementation
-            rust_result, rust_time = time_function(
-                rust_unified_diff, original, modified, 'original', 'modified'
-            )
+            with Timer() as rust_timer:
+                rust_result = rust_unified_diff(original, modified, 'original', 'modified')
+            rust_time = rust_timer.elapsed
             
             # Calculate speedup
             speedup = python_time / rust_time if rust_time > 0 else float('inf')
             
             print(f"\n  {num_lines} lines, {num_changes} changes (5%):")
-            print(f"    Python time: {python_time:.4f}s")
-            print(f"    Rust time:   {rust_time:.4f}s")
+            print(f"    Python time: {python_time:.1f}μs")
+            print(f"    Rust time:   {rust_time:.1f}μs")
             print(f"    Speedup:     {speedup:.2f}x")
             print(f"    Diff size:   {len(python_result)} lines (Python), {len(rust_result)} lines (Rust)")
             
@@ -230,17 +225,17 @@ class TestBenchmark:
         modified = generate_large_text(1000)
         
         # Time both implementations
-        python_result, python_time = time_function(
-            lambda: list(difflib.unified_diff(original, modified, 'original', 'modified'))
-        )
+        with Timer() as python_timer:
+            python_result = list(difflib.unified_diff(original, modified, 'original', 'modified'))
+        python_time = python_timer.elapsed
         
-        rust_result, rust_time = time_function(
-            rust_unified_diff, original, modified, 'original', 'modified'
-        )
+        with Timer() as rust_timer:
+            rust_result = rust_unified_diff(original, modified, 'original', 'modified')
+        rust_time = rust_timer.elapsed
         
         print(f"\n--- Large Diff Benchmark (1000 vs 1000 completely different lines) ---")
-        print(f"Python time: {python_time:.4f}s")
-        print(f"Rust time:   {rust_time:.4f}s")
+        print(f"Python time: {python_time:.1f}μs")
+        print(f"Rust time:   {rust_time:.1f}μs")
         print(f"Python lines: {len(python_result)}")
         print(f"Rust lines:   {len(rust_result)}")
         

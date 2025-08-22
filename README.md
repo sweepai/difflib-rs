@@ -23,41 +23,41 @@ The Rust implementation consistently outperforms Python's built-in `difflib` mod
 
 | File Size | Python Time | Rust Time | Speedup | Output Lines |
 |-----------|------------|-----------|---------|--------------|
-| 100 lines | 0.0001s | 0.00003s | **2.96x** | 71 |
-| 500 lines | 0.0005s | 0.00013s | **3.89x** | 300 |
-| 1,000 lines | 0.0011s | 0.00024s | **4.65x** | 587 |
-| 2,000 lines | 0.0023s | 0.00056s | **4.14x** | 1,222 |
+| 100 lines | 86.0μs | 38.3μs | **2.24x** | 71 |
+| 500 lines | 450.6μs | 130.3μs | **3.46x** | 300 |
+| 1,000 lines | 910.2μs | 220.8μs | **4.12x** | 587 |
+| 2,000 lines | 2203.1μs | 482.3μs | **4.57x** | 1,222 |
 
 #### Files with Heavy Changes (50% changes)
 
 | File Size | Python Time | Rust Time | Speedup | Output Lines |
 |-----------|------------|-----------|---------|--------------|
-| 100 lines | 0.0001s | 0.00002s | **5.72x** | 131 |
-| 500 lines | 0.0009s | 0.00019s | **4.62x** | 655 |
-| 1,000 lines | 0.0017s | 0.00036s | **4.76x** | 1,285 |
+| 100 lines | 167.9μs | 49.3μs | **3.41x** | 131 |
+| 500 lines | 1028.5μs | 252.0μs | **4.08x** | 655 |
+| 1,000 lines | 1925.0μs | 414.3μs | **4.65x** | 1,285 |
 
 #### Large Files with Few Changes
 
 | File Size | Changes | Python Time | Rust Time | Speedup | Output Lines |
 |-----------|---------|------------|-----------|---------|--------------|
-| 5,000 lines | 5 | 0.0025s | 0.00073s | **3.43x** | 47 |
-| 10,000 lines | 5 | 0.0051s | 0.00148s | **3.44x** | 47 |
-| 20,000 lines | 5 | 0.0086s | 0.00295s | **2.92x** | 47 |
+| 5,000 lines | 5 | 2842.0μs | 859.7μs | **3.31x** | 47 |
+| 10,000 lines | 5 | 5003.2μs | 1471.3μs | **3.40x** | 47 |
+| 20,000 lines | 5 | 8470.5μs | 2821.6μs | **3.00x** | 47 |
 
 #### Large Files with Medium Changes (5% changed)
 
 | File Size | Changes | Python Time | Rust Time | Speedup | Output Lines |
 |-----------|---------|------------|-----------|---------|--------------|
-| 5,000 lines | 250 | 0.0068s | 0.00138s | **4.91x** | 1,869 |
-| 10,000 lines | 500 | 0.0146s | 0.00285s | **5.12x** | 3,793 |
-| 20,000 lines | 1,000 | 0.0357s | 0.00680s | **5.25x** | 7,569 |
+| 5,000 lines | 250 | 7985.5μs | 1579.4μs | **5.06x** | 1,869 |
+| 10,000 lines | 500 | 14692.5μs | 2833.8μs | **5.18x** | 3,793 |
+| 20,000 lines | 1,000 | 34949.0μs | 6461.2μs | **5.41x** | 7,569 |
 
 #### Special Cases
 
 | Test Case | Python Time | Rust Time | Speedup |
 |-----------|------------|-----------|---------|
-| Identical sequences (5,000 lines) | 0.00145s | 0.00033s | **4.43x** |
-| Completely different (1,000 lines) | 0.00030s | 0.00020s | **1.50x** |
+| Identical sequences (5,000 lines) | 1773.1μs | 406.1μs | **4.37x** |
+| Completely different (1,000 lines) | 284.5μs | 219.8μs | **1.29x** |
 
 ### Key Optimizations
 
@@ -158,10 +158,10 @@ Performance comparison of `unified_diff_str` vs `unified_diff` with Python `spli
 
 | File Size | Python split + Rust diff | All Rust (`unified_diff_str`) | Speedup |
 |-----------|---------------------------|-------------------------------|---------|
-| 100 lines | 0.0000s | 0.0000s | 1.88x |
-| 500 lines | 0.0002s | 0.0001s | 1.39x |
-| 1000 lines | 0.0003s | 0.0003s | 1.27x |
-| 2000 lines | 0.0007s | 0.0006s | 1.22x |
+| 100 lines | 54.8μs | 21.1μs | 2.59x |
+| 500 lines | 169.9μs | 118.3μs | 1.44x |
+| 1000 lines | 316.1μs | 248.3μs | 1.27x |
+| 2000 lines | 654.8μs | 550.4μs | 1.19x |
 
 ## API
 
