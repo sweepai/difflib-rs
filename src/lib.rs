@@ -1,9 +1,29 @@
 use pyo3::prelude::*;
-use std::collections::{HashMap, VecDeque};
+use rustc_hash::FxHashMap;
+use std::collections::VecDeque;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum OpTag {
+    Equal,
+    Delete,
+    Insert,
+    Replace,
+}
+
+impl OpTag {
+    fn as_str(&self) -> &'static str {
+        match self {
+            OpTag::Equal => "equal",
+            OpTag::Delete => "delete",
+            OpTag::Insert => "insert",
+            OpTag::Replace => "replace",
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct OpCode {
-    tag: String,
+    tag: OpTag,
     i1: usize,
     i2: usize,
     j1: usize,
@@ -13,7 +33,7 @@ struct OpCode {
 struct SequenceMatcher<'a> {
     a: &'a [String],
     b: &'a [String],
-    b2j: HashMap<&'a str, Vec<usize>>,
+    b2j: FxHashMap<&'a str, Vec<usize>>,
     matching_blocks: Option<Vec<(usize, usize, usize)>>,
     opcodes: Option<Vec<OpCode>>,
 }
@@ -23,7 +43,7 @@ impl<'a> SequenceMatcher<'a> {
         let mut matcher = Self {
             a,
             b: &[],
-            b2j: HashMap::new(),
+            b2j: FxHashMap::default(),
             matching_blocks: None,
             opcodes: None,
         };
@@ -44,6 +64,10 @@ impl<'a> SequenceMatcher<'a> {
     fn chain_b(&mut self) {
         let b = &self.b;
         self.b2j.clear();
+        
+        // Pre-size HashMap based on estimated unique elements (usually ~20-50% of total)
+        let estimated_unique = (b.len() / 3).max(16);
+        self.b2j.reserve(estimated_unique);
         
         // Build b2j mapping like Python's difflib
         for (i, elt) in b.iter().enumerate() {
@@ -76,19 +100,19 @@ impl<'a> SequenceMatcher<'a> {
         }
         
         // Special case: only equal operations (no changes)
-        if codes.len() == 1 && codes[0].tag == "equal" {
+        if codes.len() == 1 && codes[0].tag == OpTag::Equal {
             return Vec::new();
         }
         
         // Fixup leading and trailing groups if they show no changes
         // This matches Python's behavior to limit context lines
-        if !codes.is_empty() && codes[0].tag == "equal" {
+        if !codes.is_empty() && codes[0].tag == OpTag::Equal {
             let first = &mut codes[0];
             first.i1 = first.i2.saturating_sub(n);
             first.j1 = first.j2.saturating_sub(n);
         }
         
-        if !codes.is_empty() && codes[codes.len() - 1].tag == "equal" {
+        if !codes.is_empty() && codes[codes.len() - 1].tag == OpTag::Equal {
             let last_idx = codes.len() - 1;
             let last = &mut codes[last_idx];
             last.i2 = (last.i1 + n).min(last.i2);
@@ -102,7 +126,7 @@ impl<'a> SequenceMatcher<'a> {
         for code in codes.drain(..) {
             // Handle n == 0 case: split on any equal operations
             if n == 0 {
-                if code.tag == "equal" && code.i2 > code.i1 {
+                if code.tag == OpTag::Equal && code.i2 > code.i1 {
                     if !group.is_empty() {
                         groups.push(std::mem::take(&mut group));
                     }
@@ -111,11 +135,11 @@ impl<'a> SequenceMatcher<'a> {
                 group.push(code);
             }
             // Handle n > 0 case: split on large equal operations
-            else if code.tag == "equal" && code.i2 - code.i1 > nn {
+            else if code.tag == OpTag::Equal && code.i2 - code.i1 > nn {
                 // End current group with trailing context
                 if !group.is_empty() {
                     group.push(OpCode {
-                        tag: "equal".to_string(),
+                        tag: OpTag::Equal,
                         i1: code.i1,
                         i2: (code.i1 + n).min(code.i2),
                         j1: code.j1,
@@ -125,7 +149,7 @@ impl<'a> SequenceMatcher<'a> {
                 }
                 // Start new group with leading context
                 group.push(OpCode {
-                    tag: "equal".to_string(),
+                    tag: OpTag::Equal,
                     i1: code.i2.saturating_sub(n).max(code.i1),
                     i2: code.i2,
                     j1: code.j2.saturating_sub(n).max(code.j1),
@@ -136,17 +160,23 @@ impl<'a> SequenceMatcher<'a> {
             }
         }
         
-        // Add final group if it exists and isn't just an equal operation
-        if !group.is_empty() && !(group.len() == 1 && group[0].tag == "equal") {
-            groups.push(group);
+        // Add final group if it exists and has non-equal operations or more than just context
+        if !group.is_empty() {
+            // Python's behavior: include group if it has changes or if it's not just a single equal operation
+            let has_changes = group.iter().any(|op| op.tag != OpTag::Equal);
+            let is_single_equal = group.len() == 1 && group[0].tag == OpTag::Equal;
+            
+            if has_changes || !is_single_equal {
+                groups.push(group);
+            }
         }
         
         groups
     }
 
     fn get_opcodes(&self) -> Vec<OpCode> {
-        let mut opcodes = Vec::new();
         let matches = self.get_matching_blocks();
+        let mut opcodes = Vec::with_capacity(matches.len() * 2);
 
         let mut i = 0usize;
         let mut j = 0usize;
@@ -154,7 +184,7 @@ impl<'a> SequenceMatcher<'a> {
         for (ai, bj, size) in matches {
             if i < ai && j < bj {
                 opcodes.push(OpCode {
-                    tag: "replace".to_string(),
+                    tag: OpTag::Replace,
                     i1: i,
                     i2: ai,
                     j1: j,
@@ -162,7 +192,7 @@ impl<'a> SequenceMatcher<'a> {
                 });
             } else if i < ai {
                 opcodes.push(OpCode {
-                    tag: "delete".to_string(),
+                    tag: OpTag::Delete,
                     i1: i,
                     i2: ai,
                     j1: j,
@@ -170,7 +200,7 @@ impl<'a> SequenceMatcher<'a> {
                 });
             } else if j < bj {
                 opcodes.push(OpCode {
-                    tag: "insert".to_string(),
+                    tag: OpTag::Insert,
                     i1: i,
                     i2: i,
                     j1: j,
@@ -180,7 +210,7 @@ impl<'a> SequenceMatcher<'a> {
 
             if size > 0 {
                 opcodes.push(OpCode {
-                    tag: "equal".to_string(),
+                    tag: OpTag::Equal,
                     i1: ai,
                     i2: ai + size,
                     j1: bj,
@@ -252,16 +282,15 @@ impl<'a> SequenceMatcher<'a> {
         collapsed
     }
 
+    #[inline]
     fn find_longest_match(&self, alo: usize, ahi: usize, blo: usize, bhi: usize) -> (usize, usize, usize) {
-        // Use HashMap for sparse representation like Python - CRITICAL for performance with small changes
-        
         let mut besti = alo;
         let mut bestj = blo;
         let mut bestsize = 0;
         
-        // Pre-allocate HashMaps once and reuse them - MAJOR performance optimization
-        let mut j2len: HashMap<usize, usize> = HashMap::new();
-        let mut newj2len: HashMap<usize, usize> = HashMap::new();
+        // Use FxHashMap for sparse representation like Python - maintains exact algorithm
+        let mut j2len = FxHashMap::default();
+        let mut newj2len = FxHashMap::default();
         
         for i in alo..ahi {
             // Clear instead of allocating new HashMap - much faster!
@@ -353,7 +382,9 @@ fn unified_diff(
         return Ok(Vec::new());
     }
     
-    let mut result = Vec::new();
+    // Pre-allocate with estimated capacity
+    let estimated_capacity = (a.len() + b.len()) / 2;
+    let mut result = Vec::with_capacity(estimated_capacity);
     
     let matcher = SequenceMatcher::new(&a, &b);
     let groups = matcher.get_grouped_opcodes(n);
@@ -392,28 +423,39 @@ fn unified_diff(
         result.push(format!("@@ -{} +{} @@{}", file1_range, file2_range, lineterm));
 
         for opcode in group {
-            match opcode.tag.as_str() {
-                "equal" => {
+            match opcode.tag {
+                OpTag::Equal => {
                     for i in opcode.i1..opcode.i2 {
-                        result.push(format!(" {}", a[i]));
+                        let mut line = String::with_capacity(a[i].len() + 1);
+                        line.push(' ');
+                        line.push_str(&a[i]);
+                        result.push(line);
                     }
                 }
-                "delete" | "replace" => {
+                OpTag::Delete | OpTag::Replace => {
                     for i in opcode.i1..opcode.i2 {
-                        result.push(format!("-{}", a[i]));
+                        let mut line = String::with_capacity(a[i].len() + 1);
+                        line.push('-');
+                        line.push_str(&a[i]);
+                        result.push(line);
                     }
-                    if opcode.tag == "replace" {
+                    if opcode.tag == OpTag::Replace {
                         for j in opcode.j1..opcode.j2 {
-                            result.push(format!("+{}", b[j]));
+                            let mut line = String::with_capacity(b[j].len() + 1);
+                            line.push('+');
+                            line.push_str(&b[j]);
+                            result.push(line);
                         }
                     }
                 }
-                "insert" => {
+                OpTag::Insert => {
                     for j in opcode.j1..opcode.j2 {
-                        result.push(format!("+{}", b[j]));
+                        let mut line = String::with_capacity(b[j].len() + 1);
+                        line.push('+');
+                        line.push_str(&b[j]);
+                        result.push(line);
                     }
                 }
-                _ => {}
             }
         }
     }
