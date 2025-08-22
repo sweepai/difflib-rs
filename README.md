@@ -8,65 +8,10 @@ This package provides a Rust-based implementation of the unified diff algorithm,
 
 ## Features
 
-- **🚀 3-5x Faster**: Consistently outperforms Python's difflib across all file sizes and change patterns
+- **🚀 3-5x Faster**: Consistently outperforms Python's difflib across all file sizes and change patterns (see [Performance](#performance) section for detailed benchmarks)
 - **100% Compatible**: Drop-in replacement for `difflib.unified_diff` with identical output
 - **Thoroughly Tested**: Comprehensive test suite ensuring byte-for-byte compatibility with Python's implementation
 - **Easy to use**: Simple Python API with PyO3 bindings
-
-## Performance
-
-The Rust implementation consistently outperforms Python's built-in `difflib` module while producing identical output:
-
-### Benchmark Results (Baseline - HashMap Implementation)
-
-#### Small to Medium Files (10% changes)
-
-| File Size | Python Time | Rust Time | Speedup | Output Lines |
-|-----------|------------|-----------|---------|--------------|
-| 100 lines | 86.0μs | 38.3μs | **2.24x** | 71 |
-| 500 lines | 450.6μs | 130.3μs | **3.46x** | 300 |
-| 1,000 lines | 910.2μs | 220.8μs | **4.12x** | 587 |
-| 2,000 lines | 2203.1μs | 482.3μs | **4.57x** | 1,222 |
-
-#### Files with Heavy Changes (50% changes)
-
-| File Size | Python Time | Rust Time | Speedup | Output Lines |
-|-----------|------------|-----------|---------|--------------|
-| 100 lines | 167.9μs | 49.3μs | **3.41x** | 131 |
-| 500 lines | 1028.5μs | 252.0μs | **4.08x** | 655 |
-| 1,000 lines | 1925.0μs | 414.3μs | **4.65x** | 1,285 |
-
-#### Large Files with Few Changes
-
-| File Size | Changes | Python Time | Rust Time | Speedup | Output Lines |
-|-----------|---------|------------|-----------|---------|--------------|
-| 5,000 lines | 5 | 2842.0μs | 859.7μs | **3.31x** | 47 |
-| 10,000 lines | 5 | 5003.2μs | 1471.3μs | **3.40x** | 47 |
-| 20,000 lines | 5 | 8470.5μs | 2821.6μs | **3.00x** | 47 |
-
-#### Large Files with Medium Changes (5% changed)
-
-| File Size | Changes | Python Time | Rust Time | Speedup | Output Lines |
-|-----------|---------|------------|-----------|---------|--------------|
-| 5,000 lines | 250 | 7985.5μs | 1579.4μs | **5.06x** | 1,869 |
-| 10,000 lines | 500 | 14692.5μs | 2833.8μs | **5.18x** | 3,793 |
-| 20,000 lines | 1,000 | 34949.0μs | 6461.2μs | **5.41x** | 7,569 |
-
-#### Special Cases
-
-| Test Case | Python Time | Rust Time | Speedup |
-|-----------|------------|-----------|---------|
-| Identical sequences (5,000 lines) | 1773.1μs | 406.1μs | **4.37x** |
-| Completely different (1,000 lines) | 284.5μs | 219.8μs | **1.29x** |
-
-### Key Optimizations
-
-The performance improvements come from:
-- **FxHashMap (Firefox's fast hash)** instead of Python's dict for sparse representation
-- **Efficient HashMap swapping** to avoid allocations (using `std::mem::swap`)
-- **Queue-based matching algorithm** for better cache locality
-- **Optimized string operations** leveraging Rust's zero-cost abstractions
-- **Popularity heuristic** to skip overly common elements (matches Python's algorithm)
 
 ## Installation
 
@@ -116,7 +61,9 @@ for line in diff:
     print(line, end='')
 ```
 
-**Note**: Currently only `unified_diff` is supported. Other `difflib` functions are not implemented.
+**Note**: Currently, only `unified_diff` is supported. Other `difflib` functions are not implemented, but pull requests are welcome!
+
+Most agents (including Sweep) can add support for any other methods if needed. A copy of the Python implementation is provided in `src/difflib.py` for reference.
 
 ### Extra: String-based API
 
@@ -152,7 +99,53 @@ The `unified_diff_str` function:
 - Supports `\n`, `\r\n`, and `\r` line endings
 - Has a `keepends` parameter to preserve line endings in the output
 
-## String Splitting Performance
+## Performance
+
+The Rust implementation consistently outperforms Python's built-in `difflib` module while producing identical output:
+
+### Benchmark Results (Baseline - HashMap Implementation)
+
+#### Small to Medium Files (10% changes)
+
+| File Size | Python Time | Rust Time | Speedup | Output Lines |
+|-----------|------------|-----------|---------|--------------|
+| 100 lines | 86.0μs | 38.3μs | **2.24x** | 71 |
+| 500 lines | 450.6μs | 130.3μs | **3.46x** | 300 |
+| 1,000 lines | 910.2μs | 220.8μs | **4.12x** | 587 |
+| 2,000 lines | 2203.1μs | 482.3μs | **4.57x** | 1,222 |
+
+#### Files with Heavy Changes (50% changes)
+
+| File Size | Python Time | Rust Time | Speedup | Output Lines |
+|-----------|------------|-----------|---------|--------------|
+| 100 lines | 167.9μs | 49.3μs | **3.41x** | 131 |
+| 500 lines | 1028.5μs | 252.0μs | **4.08x** | 655 |
+| 1,000 lines | 1925.0μs | 414.3μs | **4.65x** | 1,285 |
+
+#### Large Files with Few Changes
+
+| File Size | Changes | Python Time | Rust Time | Speedup | Output Lines |
+|-----------|---------|------------|-----------|---------|--------------|
+| 5,000 lines | 5 | 2842.0μs | 859.7μs | **3.31x** | 47 |
+| 10,000 lines | 5 | 5003.2μs | 1471.3μs | **3.40x** | 47 |
+| 20,000 lines | 5 | 8470.5μs | 2821.6μs | **3.00x** | 47 |
+
+#### Large Files with Medium Changes (5% changed)
+
+| File Size | Changes | Python Time | Rust Time | Speedup | Output Lines |
+|-----------|---------|------------|-----------|---------|--------------|
+| 5,000 lines | 250 | 7985.5μs | 1579.4μs | **5.06x** | 1,869 |
+| 10,000 lines | 500 | 14692.5μs | 2833.8μs | **5.18x** | 3,793 |
+| 20,000 lines | 1,000 | 34949.0μs | 6461.2μs | **5.41x** | 7,569 |
+
+#### Special Cases
+
+| Test Case | Python Time | Rust Time | Speedup |
+|-----------|------------|-----------|---------|
+| Identical sequences (5,000 lines) | 1773.1μs | 406.1μs | **4.37x** |
+| Completely different (1,000 lines) | 284.5μs | 219.8μs | **1.29x** |
+
+#### String Splitting Performance
 
 Performance comparison of `unified_diff_str` vs `unified_diff` with Python `splitlines()`:
 
@@ -165,13 +158,33 @@ Performance comparison of `unified_diff_str` vs `unified_diff` with Python `spli
 
 ## API
 
-The `unified_diff` function accepts the same parameters as Python's `difflib.unified_diff`:
-
-- `a`, `b`: Sequences of lines to compare
-- `fromfile`, `tofile`: Filenames for the diff header
-- `fromfiledate`, `tofiledate`: File modification dates
-- `n`: Number of context lines (default: 3)
-- `lineterm`: Line terminator (default: '\n')
+```python
+def unified_diff(a, b, fromfile='', tofile='', fromfiledate='', tofiledate='', n=3, lineterm='\n'):
+    """
+    Compare two sequences of lines; generate the unified diff.
+    
+    Unified diffs are a compact way of showing line changes and a few
+    lines of context. The number of context lines is set by n which
+    defaults to three.
+    
+    Parameters:
+        a: Sequence of lines to compare (the 'from' file)
+        b: Sequence of lines to compare (the 'to' file)
+        fromfile: Label to use for the 'from' file in the diff header
+        tofile: Label to use for the 'to' file in the diff header
+        fromfiledate: Modification date of the 'from' file
+        tofiledate: Modification date of the 'to' file
+        n: Number of context lines (default: 3)
+        lineterm: Line terminator to use (default: '\n')
+    
+    Returns:
+        Generator yielding unified diff format strings
+    
+    Note: This is a high-performance Rust implementation that provides
+    3-5x speedup over Python's difflib while maintaining 100% compatibility.
+    """
+    pass
+```
 
 ## Development
 
@@ -188,6 +201,10 @@ python -m pytest tests/test_benchmark.py -s
 # Build the package with optimizations
 maturin develop --release
 ```
+
+## Contributing
+
+If you want a feature or have an idea, just create a pull request! Contributions are welcome.
 
 ## Author
 
