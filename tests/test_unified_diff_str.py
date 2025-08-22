@@ -5,8 +5,7 @@ import time
 import difflib
 import random
 import string
-from difflib_rs import unified_diff
-from difflib_rs.difflib_rs import unified_diff_str
+from difflib_rs import unified_diff, unified_diff_str
 
 
 def test_basic_functionality():

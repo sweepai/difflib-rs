@@ -94,9 +94,11 @@ maturin develop --release
 
 ## Usage
 
-### Compare lists of lines (original function)
-```python
-from difflib_rs import unified_diff
+This is a **drop-in replacement** for Python's `difflib.unified_diff`. Simply replace your import:
+
+```diff
+- from difflib import unified_diff
++ from difflib_rs import unified_diff
 
 # Compare two sequences of lines
 a = ['line1', 'line2', 'line3']
@@ -114,9 +116,14 @@ for line in diff:
     print(line, end='')
 ```
 
-### Compare strings directly (new optimized function)
+**Note**: Currently only `unified_diff` is supported. Other `difflib` functions are not implemented.
+
+### Extra: String-based API
+
+For additional convenience, use `unified_diff_str` directly with (unsplit) strings:
+
 ```python
-from difflib_rs.difflib_rs import unified_diff_str
+from difflib_rs import unified_diff_str
 
 # Compare two strings directly - no need to split first!
 text_a = """line1
@@ -138,12 +145,6 @@ diff = unified_diff_str(
 for line in diff:
     print(line, end='')
 ```
-
-The `unified_diff_str` function:
-- Takes strings directly instead of lists
-- Handles line splitting internally in Rust (faster than Python's `splitlines()`)
-- Supports `\n`, `\r\n`, and `\r` line endings
-- Has a `keepends` parameter to preserve line endings in the output
 
 ## API
 
