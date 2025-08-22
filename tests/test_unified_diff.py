@@ -313,6 +313,161 @@ def test_edge_cases_identical_output():
                 )
 
 
+@pytest.mark.parametrize("n", [0, 1, 2, 3, 10])
+@pytest.mark.parametrize("operation,a,b,description", [
+    # Start insertions
+    ("start_insert", ['line2', 'line3', 'line4'], ['NEW', 'line2', 'line3', 'line4'], "Start insertion"),
+    ("start_insert_multiple", ['line3', 'line4'], ['NEW1', 'NEW2', 'line3', 'line4'], "Multiple start insertions"),
+    
+    # End insertions  
+    ("end_insert", ['line1', 'line2', 'line3'], ['line1', 'line2', 'line3', 'NEW'], "End insertion"),
+    ("end_insert_multiple", ['line1', 'line2'], ['line1', 'line2', 'NEW1', 'NEW2'], "Multiple end insertions"),
+    
+    # Middle insertions
+    ("middle_insert", ['line1', 'line3'], ['line1', 'NEW', 'line3'], "Middle insertion"),
+    ("middle_insert_multiple", ['line1', 'line4'], ['line1', 'NEW1', 'NEW2', 'NEW3', 'line4'], "Multiple middle insertions"),
+    
+    # Start deletions
+    ("start_delete", ['OLD', 'line2', 'line3', 'line4'], ['line2', 'line3', 'line4'], "Start deletion"),
+    ("start_delete_multiple", ['OLD1', 'OLD2', 'line3', 'line4'], ['line3', 'line4'], "Multiple start deletions"),
+    
+    # End deletions
+    ("end_delete", ['line1', 'line2', 'line3', 'OLD'], ['line1', 'line2', 'line3'], "End deletion"),
+    ("end_delete_multiple", ['line1', 'line2', 'OLD1', 'OLD2'], ['line1', 'line2'], "Multiple end deletions"),
+    
+    # Middle deletions
+    ("middle_delete", ['line1', 'OLD', 'line3'], ['line1', 'line3'], "Middle deletion"),
+    ("middle_delete_multiple", ['line1', 'OLD1', 'OLD2', 'OLD3', 'line5'], ['line1', 'line5'], "Multiple middle deletions"),
+    
+    # Complex scenarios
+    ("start_and_end", ['OLD_START', 'line2', 'line3', 'OLD_END'], ['NEW_START', 'line2', 'line3', 'NEW_END'], "Start and end changes"),
+    ("scattered_changes", ['A', 'OLD1', 'C', 'OLD2', 'E'], ['A', 'NEW1', 'C', 'NEW2', 'E'], "Scattered changes"),
+    ("adjacent_changes", ['line1', 'OLD1', 'OLD2', 'line4'], ['line1', 'NEW1', 'NEW2', 'line4'], "Adjacent changes"),
+    
+    # Edge cases with context
+    ("single_line_file", ['OLD'], ['NEW'], "Single line file"),
+    ("two_line_file", ['line1', 'OLD'], ['line1', 'NEW'], "Two line file"),
+    ("empty_to_content", [], ['line1', 'line2'], "Empty to content"),
+    ("content_to_empty", ['line1', 'line2'], [], "Content to empty"),
+])
+def test_comprehensive_patterns_identical_output(n, operation, a, b, description):
+    """Test various insertion/deletion patterns with different context sizes."""
+    # Test with different line terminators and file parameters
+    test_params = [
+        ('a.txt', 'b.txt', '', '', '\n'),
+        ('file1', 'file2', '2024-01-01', '2024-01-02', '\n'),
+        ('original', 'modified', '', '', ''),
+    ]
+    
+    for fromfile, tofile, fromdate, todate, lineterm in test_params:
+        python_result = list(difflib.unified_diff(
+            a, b, fromfile, tofile, fromdate, todate, n, lineterm
+        ))
+        
+        rust_result = rust_unified_diff(
+            a, b, fromfile, tofile, fromdate, todate, n, lineterm
+        )
+        
+        assert python_result == rust_result, (
+            f"Output mismatch for {operation} ({description}), n={n}, lineterm={lineterm!r}\n"
+            f"Files: {fromfile} -> {tofile}\n"
+            f"Sequences: {a} -> {b}\n"
+            f"Python result ({len(python_result)} lines): {python_result}\n"
+            f"Rust result ({len(rust_result)} lines): {rust_result}"
+        )
+
+
+@pytest.mark.parametrize("n", [0, 1, 2, 3, 5, 10])
+def test_large_file_patterns_with_context(n):
+    """Test large files with different patterns and context sizes."""
+    base_size = 50
+    base_lines = [f"line_{i:03d}" for i in range(base_size)]
+    
+    test_cases = [
+        # Start region changes
+        (base_lines, ['NEW_START'] + base_lines[1:], "Replace first line"),
+        (base_lines, ['NEW1', 'NEW2'] + base_lines[2:], "Replace first two lines"),
+        
+        # End region changes  
+        (base_lines, base_lines[:-1] + ['NEW_END'], "Replace last line"),
+        (base_lines, base_lines[:-2] + ['NEW1', 'NEW2'], "Replace last two lines"),
+        
+        # Middle region changes
+        (base_lines, base_lines[:25] + ['NEW_MID'] + base_lines[26:], "Replace middle line"),
+        (base_lines, base_lines[:20] + ['NEW1', 'NEW2', 'NEW3'] + base_lines[23:], "Replace middle block"),
+        
+        # Multiple scattered changes
+        (base_lines, 
+         ['NEW_0'] + base_lines[1:10] + ['NEW_10'] + base_lines[11:20] + ['NEW_20'] + base_lines[21:],
+         "Multiple scattered changes"),
+        
+        # Dense changes in small region
+        (base_lines,
+         base_lines[:15] + [f"CHANGED_{i}" for i in range(10)] + base_lines[25:],
+         "Dense changes in middle"),
+    ]
+    
+    for a, b, description in test_cases:
+        python_result = list(difflib.unified_diff(
+            a, b, 'original.txt', 'modified.txt', '2024-01-01', '2024-01-02', n, '\n'
+        ))
+        
+        rust_result = rust_unified_diff(
+            a, b, 'original.txt', 'modified.txt', '2024-01-01', '2024-01-02', n, '\n'
+        )
+        
+        assert python_result == rust_result, (
+            f"Output mismatch for large file test: {description}, n={n}\n"
+            f"File size: {len(a)} -> {len(b)} lines\n"
+            f"Python result: {len(python_result)} lines\n"
+            f"Rust result: {len(rust_result)} lines\n"
+            f"First difference at line: {next((i for i, (p, r) in enumerate(zip(python_result, rust_result)) if p != r), 'N/A')}"
+        )
+
+
+@pytest.mark.parametrize("n", [0, 1, 2, 3, 10])  
+def test_context_boundary_behavior(n):
+    """Test behavior at context boundaries with different n values."""
+    # Create a file where changes are exactly n lines apart
+    lines = [f"line_{i:02d}" for i in range(20)]
+    
+    test_cases = [
+        # Changes separated by exactly 2*n lines (should create separate hunks when n > 0)
+        (lambda n: max(2, 2*n + 2), "Changes separated by 2*n+2 lines"),
+        
+        # Changes separated by exactly 2*n-1 lines (should merge hunks)  
+        (lambda n: max(1, 2*n - 1) if n > 0 else 1, "Changes separated by 2*n-1 lines"),
+        
+        # Changes separated by exactly 2*n lines (boundary case)
+        (lambda n: max(1, 2*n) if n > 0 else 1, "Changes separated by 2*n lines"),
+    ]
+    
+    for gap_func, description in test_cases:
+        gap = gap_func(n)
+        if gap >= len(lines) - 2:
+            continue  # Skip if gap is too large for our test data
+            
+        # Create two changes separated by 'gap' lines
+        modified_lines = lines.copy()
+        modified_lines[5] = "CHANGED_1"
+        if 5 + gap + 1 < len(modified_lines):
+            modified_lines[5 + gap + 1] = "CHANGED_2"
+        
+        python_result = list(difflib.unified_diff(
+            lines, modified_lines, 'a.txt', 'b.txt', '', '', n, '\n'
+        ))
+        
+        rust_result = rust_unified_diff(
+            lines, modified_lines, 'a.txt', 'b.txt', '', '', n, '\n'
+        )
+        
+        assert python_result == rust_result, (
+            f"Context boundary test failed: {description}, n={n}, gap={gap}\n"
+            f"Python result ({len(python_result)} lines): {python_result}\n"
+            f"Rust result ({len(rust_result)} lines): {rust_result}"
+        )
+
+
 def test_known_examples():
     """Test with known examples from Python documentation."""
     # Example from Python docs
