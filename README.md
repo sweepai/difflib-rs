@@ -99,4 +99,4 @@ maturin develop --release
 
 ## Author
 
-Everything in this project was written by Sweep AI.
+Everything in this project was written by Sweep AI, an AI agent for Jetbrains IDEs.
