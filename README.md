@@ -1,4 +1,4 @@
-# difflib-rst
+# difflib-rs
 
 A high-performance Rust implementation of Python's `difflib.unified_diff` function with PyO3 bindings.
 

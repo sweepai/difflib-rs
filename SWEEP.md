@@ -1,4 +1,4 @@
-# SWEEP.md - difflib-rst Project Knowledge Base
+# SWEEP.md - difflib-rs Project Knowledge Base
 
 ## Project Overview
 This is a Rust implementation of Python's `difflib.unified_diff` function with PyO3 bindings, created as a high-performance alternative to the built-in Python implementation.
