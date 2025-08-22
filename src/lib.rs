@@ -259,11 +259,13 @@ impl<'a> SequenceMatcher<'a> {
         let mut bestj = blo;
         let mut bestsize = 0;
         
-        // Use HashMap like Python for sparse representation - only stores non-zero values
+        // Pre-allocate HashMaps once and reuse them - MAJOR performance optimization
         let mut j2len: HashMap<usize, usize> = HashMap::new();
+        let mut newj2len: HashMap<usize, usize> = HashMap::new();
         
         for i in alo..ahi {
-            let mut newj2len: HashMap<usize, usize> = HashMap::new();
+            // Clear instead of allocating new HashMap - much faster!
+            newj2len.clear();
             
             // Get all positions where a[i] appears in b (like Python's b2j.get())
             if let Some(indices) = self.b2j.get(self.a[i].as_str()) {
@@ -297,8 +299,8 @@ impl<'a> SequenceMatcher<'a> {
                 }
             }
             
-            // Move instead of swap - more efficient for HashMap
-            j2len = newj2len;
+            // Swap HashMaps efficiently - no allocations
+            std::mem::swap(&mut j2len, &mut newj2len);
         }
         
         // Extend the best match as far as possible in both directions

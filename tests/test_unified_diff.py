@@ -425,6 +425,96 @@ def test_large_file_patterns_with_context(n):
         )
 
 
+@pytest.mark.parametrize("num_changes", [1, 2, 3, 5, 10, 15, 20, 25, 30, 40, 50])
+@pytest.mark.parametrize("n", [0, 3, 5])
+def test_small_changes_in_1000_line_files(num_changes, n):
+    """Test small numbers of changes (1-50) in 1000 line files with different context sizes."""
+    file_size = 1000
+    base_lines = [f"line_{i:04d}_content_here" for i in range(file_size)]
+    
+    # Test different change patterns
+    change_patterns = [
+        ("scattered", "Scattered changes throughout file"),
+        ("clustered_start", "Changes clustered at start"),
+        ("clustered_middle", "Changes clustered in middle"),
+        ("clustered_end", "Changes clustered at end"),
+        ("mixed_operations", "Mix of insertions, deletions, and replacements"),
+    ]
+    
+    for pattern, description in change_patterns:
+        modified_lines = base_lines.copy()
+        
+        if pattern == "scattered":
+            # Evenly distribute changes throughout the file
+            indices = [i * (file_size // (num_changes + 1)) for i in range(1, num_changes + 1)]
+            for i, idx in enumerate(indices):
+                if idx < len(modified_lines):
+                    modified_lines[idx] = f"CHANGED_scattered_{i:02d}"
+                    
+        elif pattern == "clustered_start":
+            # All changes in first part of file
+            for i in range(min(num_changes, len(modified_lines))):
+                modified_lines[i] = f"CHANGED_start_{i:02d}"
+                
+        elif pattern == "clustered_middle":
+            # All changes in middle of file
+            start_idx = file_size // 2 - num_changes // 2
+            for i in range(num_changes):
+                idx = start_idx + i
+                if 0 <= idx < len(modified_lines):
+                    modified_lines[idx] = f"CHANGED_middle_{i:02d}"
+                    
+        elif pattern == "clustered_end":
+            # All changes at end of file
+            start_idx = max(0, file_size - num_changes)
+            for i in range(num_changes):
+                idx = start_idx + i
+                if idx < len(modified_lines):
+                    modified_lines[idx] = f"CHANGED_end_{i:02d}"
+                    
+        elif pattern == "mixed_operations":
+            # Mix of insertions, deletions, and replacements
+            indices = [i * (file_size // (num_changes + 1)) for i in range(1, num_changes + 1)]
+            for i, idx in enumerate(indices):
+                if idx >= len(modified_lines):
+                    continue
+                    
+                op_type = i % 3
+                if op_type == 0:  # Replace
+                    modified_lines[idx] = f"REPLACED_{i:02d}"
+                elif op_type == 1:  # Delete (mark for deletion)
+                    modified_lines[idx] = None
+                else:  # Insert (duplicate and modify)
+                    modified_lines[idx] = f"INSERTED_{i:02d}"
+            
+            # Remove None entries (deletions)
+            modified_lines = [line for line in modified_lines if line is not None]
+        
+        # Test the pattern
+        python_result = list(difflib.unified_diff(
+            base_lines, modified_lines,
+            'original_1000.txt', 'modified_1000.txt',
+            '2024-01-01', '2024-01-02',
+            n=n, lineterm='\n'
+        ))
+        
+        rust_result = rust_unified_diff(
+            base_lines, modified_lines,
+            'original_1000.txt', 'modified_1000.txt',
+            '2024-01-01', '2024-01-02',
+            n=n, lineterm='\n'
+        )
+        
+        assert python_result == rust_result, (
+            f"Output mismatch for {description} in 1000-line file\n"
+            f"Pattern: {pattern}, Changes: {num_changes}, Context: n={n}\n"
+            f"File size: {len(base_lines)} -> {len(modified_lines)} lines\n"
+            f"Python result: {len(python_result)} diff lines\n"
+            f"Rust result: {len(rust_result)} diff lines\n"
+            f"First difference at: {next((i for i, (p, r) in enumerate(zip(python_result, rust_result)) if p != r), 'N/A')}"
+        )
+
+
 @pytest.mark.parametrize("n", [0, 1, 2, 3, 10])  
 def test_context_boundary_behavior(n):
     """Test behavior at context boundaries with different n values."""
