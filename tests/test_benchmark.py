@@ -3,7 +3,7 @@ import difflib
 import time
 import random
 import string
-from difflib_rst import unified_diff as rust_unified_diff
+from difflib_rs import unified_diff as rust_unified_diff
 
 
 def generate_large_text(num_lines: int, line_length: int = 80) -> list[str]:

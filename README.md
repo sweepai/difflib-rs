@@ -80,7 +80,7 @@ maturin develop --release
 ## Usage
 
 ```python
-from difflib_rst import unified_diff
+from difflib_rs import unified_diff
 
 # Compare two sequences of lines
 a = ['line1', 'line2', 'line3']

@@ -464,7 +464,7 @@ fn unified_diff(
 }
 
 #[pymodule]
-fn difflib_rst(_py: Python, m: &PyModule) -> PyResult<()> {
+fn difflib_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unified_diff, m)?)?;
     Ok(())
 }

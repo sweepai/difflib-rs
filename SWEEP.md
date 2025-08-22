@@ -95,7 +95,7 @@ difflib-rst/
 ```bash
 # Compare outputs between Rust and Python implementations
 python3 -c "
-from difflib_rst import unified_diff as rust_unified_diff
+from difflib_rs import unified_diff as rust_unified_diff
 import difflib
 
 a = ['line1', 'line2', 'line3']

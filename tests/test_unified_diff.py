@@ -2,7 +2,7 @@ import pytest
 import difflib
 import random
 import string
-from difflib_rst import unified_diff as rust_unified_diff
+from difflib_rs import unified_diff as rust_unified_diff
 
 
 def test_basic_sanity_check():
