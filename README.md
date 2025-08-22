@@ -70,9 +70,9 @@ The performance improvements come from:
 
 ## Installation
 
-### From TestPyPI (current release)
+### From pip
 ```bash
-pip install -i https://test.pypi.org/simple/ difflib-rs
+pip install difflib-rs
 ```
 
 ### Build from source
