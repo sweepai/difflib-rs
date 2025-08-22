@@ -11,14 +11,7 @@ enum OpTag {
 }
 
 impl OpTag {
-    fn as_str(&self) -> &'static str {
-        match self {
-            OpTag::Equal => "equal",
-            OpTag::Delete => "delete",
-            OpTag::Insert => "insert",
-            OpTag::Replace => "replace",
-        }
-    }
+    // Methods removed - enum values are used directly
 }
 
 #[derive(Debug, Clone)]

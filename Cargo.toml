@@ -1,5 +1,5 @@
 [package]
-name = "difflib-rst"
+name = "difflib-rs"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,5 +8,5 @@ name = "difflib_rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.20", features = ["extension-module"] }
+pyo3 = { version = "0.20", features = ["extension-module", "abi3-py310"] }
 rustc-hash = "2.0"
