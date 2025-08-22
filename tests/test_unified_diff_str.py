@@ -452,3 +452,62 @@ def test_unified_diff_str_keepends_performance():
     # Both should complete successfully
     assert len(result_false) > 0
     assert len(result_true) > 0
+
+
+@pytest.mark.parametrize("keepends", [False, True])
+def test_unified_diff_str_keepends_vs_baseline(keepends):
+    """Test keepends performance vs Python splitlines baseline."""
+    random.seed(42)
+    
+    # Generate text with mixed line endings (1000 lines)
+    lines = []
+    for i in range(1000):
+        line = f"Line {i:04d} - content"
+        # Mix different line endings
+        if i % 3 == 0:
+            lines.append(line + '\r\n')
+        elif i % 3 == 1:
+            lines.append(line + '\n')
+        else:
+            lines.append(line + '\r')
+    
+    original = ''.join(lines)
+    
+    # Modify some lines
+    modified_lines = lines.copy()
+    for i in range(0, len(modified_lines), 20):  # 5% changes
+        modified_lines[i] = modified_lines[i].replace('Line', 'Modified')
+    modified = ''.join(modified_lines)
+    
+    # Time baseline: Python splitlines + Rust unified_diff
+    baseline_result, baseline_time = time_function(
+        python_split_rust_diff, original, modified, 'original', 'modified', keepends=keepends
+    )
+    
+    # Time optimized: Rust unified_diff_str
+    optimized_result, optimized_time = time_function(
+        unified_diff_str, original, modified, 'original', 'modified', keepends=keepends
+    )
+    
+    # Calculate speedup
+    speedup = baseline_time / optimized_time if optimized_time > 0 else float('inf')
+    
+    print(f"\n--- keepends={keepends} Performance (1000 lines, mixed endings) ---")
+    print(f"Python split + Rust diff: {baseline_time:.4f}s")
+    print(f"Rust unified_diff_str:    {optimized_time:.4f}s")
+    print(f"Speedup:                  {speedup:.2f}x {'FASTER' if speedup > 1 else 'SLOWER'}")
+    print(f"Result size: {len(baseline_result)} vs {len(optimized_result)} lines")
+    
+    # Verify results are identical (correctness check)
+    assert len(baseline_result) == len(optimized_result), "Results should be identical length"
+    
+    # Check that every line is identical
+    for i, (baseline_line, optimized_line) in enumerate(zip(baseline_result, optimized_result)):
+        assert baseline_line == optimized_line, (
+            f"Line {i} differs for keepends={keepends}:\n"
+            f"Baseline:  {repr(baseline_line)}\n"
+            f"Optimized: {repr(optimized_line)}"
+        )
+    
+    # Performance should be competitive
+    assert optimized_time <= baseline_time * 2, f"Optimized version should be competitive for keepends={keepends}"
