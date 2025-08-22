@@ -146,6 +146,23 @@ for line in diff:
     print(line, end='')
 ```
 
+The `unified_diff_str` function:
+- Takes strings directly instead of lists
+- Handles line splitting internally in Rust (faster than Python's `splitlines()`)
+- Supports `\n`, `\r\n`, and `\r` line endings
+- Has a `keepends` parameter to preserve line endings in the output
+
+## String Splitting Performance
+
+Performance comparison of `unified_diff_str` vs `unified_diff` with Python `splitlines()`:
+
+| File Size | Python split + Rust diff | All Rust (`unified_diff_str`) | Speedup |
+|-----------|---------------------------|-------------------------------|---------|
+| 100 lines | 0.0000s | 0.0000s | 1.88x |
+| 500 lines | 0.0002s | 0.0001s | 1.39x |
+| 1000 lines | 0.0003s | 0.0003s | 1.27x |
+| 2000 lines | 0.0007s | 0.0006s | 1.22x |
+
 ## API
 
 The `unified_diff` function accepts the same parameters as Python's `difflib.unified_diff`:
