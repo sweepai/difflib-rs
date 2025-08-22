@@ -358,6 +358,66 @@ fn format_range_unified(start: usize, stop: usize) -> String {
     }
 }
 
+/// Split a string into lines, handling various line endings
+fn split_lines(text: &str, keepends: bool) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    let mut chars = text.chars().peekable();
+    
+    while let Some(ch) = chars.next() {
+        if ch == '\r' {
+            if keepends {
+                current.push('\r');
+            }
+            // Check for \r\n
+            if chars.peek() == Some(&'\n') {
+                chars.next();
+                if keepends {
+                    current.push('\n');
+                }
+            }
+            lines.push(current.clone());
+            current.clear();
+        } else if ch == '\n' {
+            if keepends {
+                current.push('\n');
+            }
+            lines.push(current.clone());
+            current.clear();
+        } else {
+            current.push(ch);
+        }
+    }
+    
+    // Don't forget the last line if it doesn't end with a newline
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    
+    lines
+}
+
+#[pyfunction]
+#[pyo3(signature = (a, b, fromfile="", tofile="", fromfiledate="", tofiledate="", n=3, lineterm="\n", keepends=false))]
+fn unified_diff_str(
+    a: String,
+    b: String,
+    fromfile: &str,
+    tofile: &str,
+    fromfiledate: &str,
+    tofiledate: &str,
+    n: usize,
+    lineterm: &str,
+    keepends: bool,
+) -> PyResult<Vec<String>> {
+    // Split the strings into lines
+    let a_lines = split_lines(&a, keepends);
+    let b_lines = split_lines(&b, keepends);
+    
+    // Call the original unified_diff function
+    unified_diff(a_lines, b_lines, fromfile, tofile, fromfiledate, tofiledate, n, lineterm)
+}
+
 #[pyfunction]
 #[pyo3(signature = (a, b, fromfile="", tofile="", fromfiledate="", tofiledate="", n=3, lineterm="\n"))]
 fn unified_diff(
@@ -459,5 +519,6 @@ fn unified_diff(
 #[pymodule]
 fn difflib_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unified_diff, m)?)?;
+    m.add_function(wrap_pyfunction!(unified_diff_str, m)?)?;
     Ok(())
 }

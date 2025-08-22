@@ -94,6 +94,7 @@ maturin develop --release
 
 ## Usage
 
+### Compare lists of lines (original function)
 ```python
 from difflib_rs import unified_diff
 
@@ -112,6 +113,37 @@ diff = unified_diff(
 for line in diff:
     print(line, end='')
 ```
+
+### Compare strings directly (new optimized function)
+```python
+from difflib_rs.difflib_rs import unified_diff_str
+
+# Compare two strings directly - no need to split first!
+text_a = """line1
+line2
+line3"""
+
+text_b = """line1
+modified
+line3"""
+
+# The function handles splitting internally (more efficient)
+diff = unified_diff_str(
+    text_a, text_b,
+    fromfile='original.txt',
+    tofile='modified.txt',
+    keepends=False  # Whether to keep line endings in the diff
+)
+
+for line in diff:
+    print(line, end='')
+```
+
+The `unified_diff_str` function:
+- Takes strings directly instead of lists
+- Handles line splitting internally in Rust (faster than Python's `splitlines()`)
+- Supports `\n`, `\r\n`, and `\r` line endings
+- Has a `keepends` parameter to preserve line endings in the output
 
 ## API
 

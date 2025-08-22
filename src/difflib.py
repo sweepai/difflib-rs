@@ -1,3 +1,5 @@
+# Copied from https://github.com/python/cpython/blob/bb8791c0b75b5970d109e5557bfcca8a578a02af/Lib/difflib.py for reference
+
 """
 Module difflib -- helpers for computing deltas between objects.
 
